@@ -1,40 +1,29 @@
 'use client'
+
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 
-type UserProfile = {
-  id: string
-  username: string
-  bio?: string
-  avatar_url?: string
-}
-
 export default function HomePage() {
-  const [profiles, setProfiles] = useState<UserProfile[]>([])
+  const [profiles, setProfiles] = useState<any[]>([])
 
   useEffect(() => {
     const fetchProfiles = async () => {
-      const { data, error } = await supabase.from('users').select('*')
-      if (!error && data) {
-        setProfiles(data)
-      }
+      const { data } = await supabase.from('users').select('*')
+      setProfiles(data || [])
     }
-
     fetchProfiles()
   }, [])
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6">Découvre les créateurs DZYR 🔥</h1>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {profiles.map((profile) => (
-          <Link key={profile.id} href={`/creator/${profile.username}`}>
-            <div className="p-4 border rounded hover:shadow cursor-pointer">
-              <div className="font-bold">{profile.username}</div>
-              <div className="text-sm text-gray-500">
-                {profile.bio ?? 'Ce créateur n’a pas encore écrit de bio.'}
-              </div>
+    <div className="pt-4">
+      <h1 className="text-2xl font-bold mb-4">Créateurs populaires</h1>
+      <div className="grid grid-cols-2 gap-4">
+        {profiles.map((user) => (
+          <Link key={user.id} href={`/creator/${user.username}`}>
+            <div className="bg-white rounded-xl p-4 shadow hover:shadow-md">
+              <div className="font-semibold">@{user.username}</div>
+              <p className="text-xs text-gray-500">{user.bio ?? 'Pas de bio'}</p>
             </div>
           </Link>
         ))}
@@ -42,3 +31,5 @@ export default function HomePage() {
     </div>
   )
 }
+
+

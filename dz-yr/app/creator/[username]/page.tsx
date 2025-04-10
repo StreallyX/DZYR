@@ -13,14 +13,14 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
     .eq('username', username)
     .single()
 
-  if (!profile) return <div>Créateur introuvable.</div>
+  if (!profile) return <div>Créateur introuvable</div>
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold">{profile.username}</h1>
-      <p className="text-gray-600">{profile.bio ?? 'Aucune bio.'}</p>
+    <div className="pt-4">
+      <h1 className="text-xl font-bold">@{profile.username}</h1>
+      <p className="text-gray-500">{profile.bio ?? 'Aucune bio.'}</p>
 
-      {/* Plus tard ici : liste de ses contenus payants */}
+      {/* Plus tard ici : contenus payants, bouton d’abonnement, etc. */}
     </div>
   )
 }
