@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import ProtectedRoute from '@/components/ProtectedRoute'
 
 export default function HomePage() {
   const [profiles, setProfiles] = useState<any[]>([])
@@ -16,6 +17,7 @@ export default function HomePage() {
   }, [])
 
   return (
+    <ProtectedRoute>
     <div className="pt-4">
       <h1 className="text-2xl font-bold mb-4">Créateurs populaires</h1>
       <div className="grid grid-cols-2 gap-4">
@@ -29,6 +31,7 @@ export default function HomePage() {
         ))}
       </div>
     </div>
+    </ProtectedRoute>
   )
 }
 

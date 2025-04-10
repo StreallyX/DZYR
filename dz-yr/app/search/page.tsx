@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import ProtectedRoute from '@/components/ProtectedRoute'
 
 export default function SearchPage() {
   const [query, setQuery] = useState('')
@@ -23,6 +24,7 @@ export default function SearchPage() {
   }, [query])
 
   return (
+    <ProtectedRoute>
     <div className="pt-4">
       <input
         type="text"
@@ -41,5 +43,6 @@ export default function SearchPage() {
         ))}
       </div>
     </div>
+    </ProtectedRoute>
   )
 }

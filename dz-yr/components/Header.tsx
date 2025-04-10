@@ -9,8 +9,10 @@ export default function Header() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
+    router.refresh() // force le rechargement des composants clients
     router.push('/auth/login')
   }
+  
 
   return (
     <header className="fixed top-0 left-0 right-0 bg-black border-b border-zinc-800 flex justify-between items-center px-6 py-3 z-50 shadow-sm">

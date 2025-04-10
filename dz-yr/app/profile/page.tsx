@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import ProtectedRoute from '@/components/ProtectedRoute'
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null)
@@ -21,6 +22,7 @@ export default function ProfilePage() {
   }, [])
 
   return (
+    <ProtectedRoute>
     <div className="pt-4">
       <h1 className="text-xl font-bold mb-2">Mon profil</h1>
       {profile ? (
@@ -33,5 +35,6 @@ export default function ProfilePage() {
         <p>Chargement...</p>
       )}
     </div>
+    </ProtectedRoute>
   )
 }

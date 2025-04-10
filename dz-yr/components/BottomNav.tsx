@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Search, User } from 'lucide-react'
+import { Home, Search, User, MessageCircle, Settings } from 'lucide-react'
 
 export default function BottomNav() {
   const pathname = usePathname()
@@ -21,6 +21,13 @@ export default function BottomNav() {
       <Link href="/profile" className={isActive('/profile')}>
         <User size={26} />
       </Link>
+      <Link href="/messages" className={isActive('/messages')}>
+        <MessageCircle size={26} />
+      </Link>
+      <Link href="/settings" className={isActive('/settings')}>
+        <Settings size={26} />
+      </Link>
+
     </nav>
   )
 }
