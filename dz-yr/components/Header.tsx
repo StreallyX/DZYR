@@ -7,24 +7,26 @@ import { useState, useEffect } from 'react'
 
 export default function Header() {
   const router = useRouter()
+  const [user, setUser] = useState<any>(null)
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    router.refresh() // force le rechargement des composants clients
     router.push('/auth/login')
   }
 
-  const [user, setUser] = useState<any>(null)
-
   useEffect(() => {
-    const getUser = async () => {
-      const { data } = await supabase.auth.getUser()
-      setUser(data.user)
-    }
-    getUser()
-  }, [])
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
 
-  
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user)
+    })
+
+    return () => {
+      listener.subscription.unsubscribe()
+    }
+  }, [])
 
   return (
     <header className="fixed top-0 left-0 right-0 bg-black border-b border-zinc-800 flex justify-between items-center px-6 py-3 z-50 shadow-sm">

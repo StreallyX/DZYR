@@ -9,7 +9,10 @@ import { useRouter } from 'next/navigation'
 export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null)
   const [contents, setContents] = useState<any[]>([])
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
   const [username, setUsername] = useState('')
+  const [userId, setUserId] = useState('')
+  const [selectedItem, setSelectedItem] = useState<any>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -25,6 +28,8 @@ export default function ProfilePage() {
         return
       }
 
+      setUserId(user.id)
+
       const { data: profileData, error: profileError } = await supabase
         .from('users')
         .select('*')
@@ -37,7 +42,6 @@ export default function ProfilePage() {
       }
 
       if (!profileData || profileData.length === 0) {
-        // double vérif pour éviter les doublons
         const { data: alreadyExists } = await supabase
           .from('users')
           .select('id')
@@ -88,10 +92,24 @@ export default function ProfilePage() {
       }
 
       setContents(contentData || [])
+
+      const signed: Record<string, string> = {}
+      for (const item of contentData || []) {
+        if (!item.media_path) continue
+        const { data: signedUrlData } = await supabase.storage
+          .from('contents')
+          .createSignedUrl(item.media_path, 60)
+        if (signedUrlData?.signedUrl) {
+          signed[item.id] = signedUrlData.signedUrl
+        }
+      }
+      setSignedUrls(signed)
     }
 
     fetchProfileAndContents()
   }, [router])
+
+  const isOwnProfile = profile?.user_id === userId
 
   return (
     <ProtectedRoute>
@@ -137,23 +155,69 @@ export default function ProfilePage() {
           {contents.map((item) => (
             <div
               key={item.id}
-              className="relative w-full aspect-square overflow-hidden bg-zinc-800"
+              onClick={() => setSelectedItem(item)}
+              className="relative w-full aspect-square overflow-hidden bg-zinc-800 cursor-pointer"
             >
-              <img
-                src={item.media_url}
-                alt="content"
-                className="w-full h-full object-cover filter blur-sm"
-              />
+              {signedUrls[item.id] && (
+                <img
+                  src={signedUrls[item.id]}
+                  alt="content"
+                  className={`w-full h-full object-cover transition-all duration-200 ${
+                    !isOwnProfile && !item.is_free ? 'blur-[8px] scale-105' : ''
+                  }`}
+                  draggable={false}
+                />
+              )}
               <div className="absolute bottom-1 right-1 bg-black bg-opacity-60 text-xs text-white px-1 rounded">
-                {item.sub_required
-                  ? 'Abonnement'
-                  : item.is_free
-                  ? 'Gratuit'
-                  : `${item.price} €`}
+                {item.sub_required ? 'Abonnement' : item.is_free ? 'Gratuit' : `${item.price} €`}
               </div>
             </div>
           ))}
         </div>
+
+        {/* Modal */}
+        {selectedItem && (
+          <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
+            <div className="bg-zinc-900 p-4 rounded shadow-lg w-full max-w-md relative">
+              <button
+                onClick={() => setSelectedItem(null)}
+                className="absolute top-2 right-2 text-white text-xl"
+              >
+                ×
+              </button>
+              {signedUrls[selectedItem.id] && (
+                <img
+                  src={signedUrls[selectedItem.id]}
+                  alt="media"
+                  className="w-full h-auto rounded mb-4"
+                />
+              )}
+              <p className="text-sm text-white mb-2">{selectedItem.description}</p>
+              <p className="text-xs text-gray-400 mb-2">
+                {selectedItem.sub_required
+                  ? 'Abonnement requis'
+                  : selectedItem.is_free
+                  ? 'Gratuit'
+                  : `${selectedItem.price} €`}
+              </p>
+              {isOwnProfile && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => router.push(`/profile/edit/${selectedItem.id}`)}
+                    className="bg-blue-600 text-white px-4 py-1 rounded text-sm"
+                  >
+                    Modifier
+                  </button>
+                  <button
+                    className="bg-red-600 text-white px-4 py-1 rounded text-sm"
+                  >
+                    Supprimer
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </ProtectedRoute>
   )
