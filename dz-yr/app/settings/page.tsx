@@ -2,103 +2,125 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import ProtectedRoute from '@/components/ProtectedRoute'
 
 export default function SettingsPage() {
   const [profile, setProfile] = useState<any>(null)
   const [bio, setBio] = useState('')
   const [price, setPrice] = useState('')
   const [avatar, setAvatar] = useState<File | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [username, setUsername] = useState('')
 
   useEffect(() => {
     const fetchProfile = async () => {
-      const { data: userData } = await supabase.auth.getUser()
-      const { data: profileData } = await supabase
+      const { data: sessionData } = await supabase.auth.getSession()
+      const userId = sessionData.session?.user.id
+
+      if (!userId) return
+
+      const { data: profileData, error } = await supabase
         .from('users')
         .select('*')
-        .eq('user_id', userData.user?.id)
-        .single()
-      setProfile(profileData)
-      setBio(profileData?.bio ?? '')
-      setPrice(profileData?.subscription_price ?? '')
+        .eq('user_id', userId)
+        .limit(1)
+
+      if (error || !profileData || profileData.length === 0) {
+        console.error('Profil introuvable', error)
+        return
+      }
+
+      const profile = profileData[0]
+      setProfile(profile)
+      setBio(profile.bio)
+      setPrice(profile.subscription_price)
+      setUsername(profile.username)
     }
+
     fetchProfile()
   }, [])
 
   const handleSave = async () => {
-    setLoading(true)
-    
     if (!profile) {
-        alert('Profil introuvable')
-        return
+      console.error('Pas de profil chargé')
+      return
     }
-      
+
     let avatar_url = profile.avatar_url
-      
 
     if (avatar) {
-      const filePath = `avatars/${profile.user_id}-${Date.now()}`
-      const { data, error } = await supabase.storage
+      const fileExt = avatar.name.split('.').pop()
+      const fileName = `${profile.user_id}-${Date.now()}.${fileExt}`
+      const filePath = `avatars/${fileName}`
+
+      const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(filePath, avatar, {
           cacheControl: '3600',
           upsert: true,
         })
 
-      if (!error) {
-        const { data: urlData } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(filePath)
-        avatar_url = urlData.publicUrl
+      if (uploadError) {
+        console.error('Erreur upload avatar :', uploadError)
+        return
       }
+
+      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath)
+      avatar_url = data.publicUrl
     }
 
-    await supabase
+    const { error: updateError } = await supabase
       .from('users')
-      .update({ bio, subscription_price: price, avatar_url })
+      .update({
+        bio,
+        subscription_price: Number(price),
+        avatar_url,
+      })
       .eq('user_id', profile.user_id)
 
-    setLoading(false)
-    alert('Profil mis à jour !')
+    if (updateError) {
+      console.error('Erreur mise à jour profil :', updateError)
+      return
+    }
+
+    alert('Profil mis à jour ✅')
   }
 
   return (
-    <ProtectedRoute>
-      <div className="p-4">
-        <h1 className="text-xl font-bold mb-4">Modifier mon profil</h1>
+    <div className="p-4">
+      <h1 className="text-xl font-bold mb-4">Modifier mon profil</h1>
 
-        <label className="block text-sm text-zinc-300 mb-2">Bio</label>
-        <textarea
-          className="w-full p-2 rounded bg-zinc-800 mb-4"
-          value={bio}
-          onChange={(e) => setBio(e.target.value)}
-        />
+      <p className="text-sm text-zinc-400 mb-4">
+        Pseudo : <span className="text-white font-semibold">{username}</span>
+      </p>
 
-        <label className="block text-sm text-zinc-300 mb-2">Prix abonnement / mois (€)</label>
-        <input
-          type="number"
-          className="w-full p-2 rounded bg-zinc-800 mb-4"
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-        />
+      <label className="block mb-1">Bio</label>
+      <textarea
+        value={bio}
+        onChange={(e) => setBio(e.target.value)}
+        className="block w-full mb-4 bg-zinc-800 p-2 rounded"
+      />
 
-        <label className="block text-sm text-zinc-300 mb-2">Photo de profil</label>
-        <input
-          type="file"
-          accept="image/*"
-          className="mb-4"
-          onChange={(e) => setAvatar(e.target.files?.[0] ?? null)}
-        />
+      <label className="block mb-1">Prix abonnement (€)</label>
+      <input
+        type="number"
+        value={price}
+        onChange={(e) => setPrice(e.target.value)}
+        className="block w-full mb-4 bg-zinc-800 p-2 rounded"
+      />
 
-        <button
-          onClick={handleSave}
-          className="bg-violet-600 hover:bg-violet-500 px-4 py-2 rounded text-sm"
-          disabled={loading}
-        >
-          {loading ? 'Enregistrement...' : 'Enregistrer'}
-        </button>
-      </div>
-    </ProtectedRoute>
+      <label className="block mb-1">Photo de profil</label>
+      <input
+        type="file"
+        accept="image/*"
+        onChange={(e) => setAvatar(e.target.files?.[0] ?? null)}
+        className="block mb-4 text-sm text-white"
+      />
+
+      <button
+        onClick={handleSave}
+        className="bg-violet-600 text-white px-4 py-2 rounded hover:bg-violet-500"
+      >
+        Enregistrer
+      </button>
+    </div>
   )
 }

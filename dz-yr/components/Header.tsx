@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useState, useEffect } from 'react'
 
 export default function Header() {
   const router = useRouter()
@@ -12,6 +13,17 @@ export default function Header() {
     router.refresh() // force le rechargement des composants clients
     router.push('/auth/login')
   }
+
+  const [user, setUser] = useState<any>(null)
+
+  useEffect(() => {
+    const getUser = async () => {
+      const { data } = await supabase.auth.getUser()
+      setUser(data.user)
+    }
+    getUser()
+  }, [])
+
   
 
   return (
@@ -19,6 +31,11 @@ export default function Header() {
       <Link href="/" className="text-2xl font-bold text-violet-500 tracking-wider">
         DZYR
       </Link>
+      {user?.email && (
+        <div className="absolute top-4 right-4 text-xs text-zinc-400">
+          Connecté : {user.email}
+        </div>
+      )}
       <button
         onClick={handleLogout}
         className="text-xs text-white bg-violet-600 hover:bg-violet-500 px-3 py-1 rounded transition"

@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation'
 export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null)
   const [contents, setContents] = useState<any[]>([])
+  const [username, setUsername] = useState('')
   const router = useRouter()
 
   useEffect(() => {
@@ -24,51 +25,57 @@ export default function ProfilePage() {
         return
       }
 
-      console.log('Utilisateur connecté :', user)
-
-      let { data: profileData, error: profileError } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .from('users')
         .select('*')
         .eq('user_id', user.id)
         .limit(1)
 
-      console.log('Profil récupéré (avant insertion) :', profileData)
+      if (profileError) {
+        console.error('Erreur récupération profil :', profileError)
+        return
+      }
 
       if (!profileData || profileData.length === 0) {
-        console.warn('Aucun profil trouvé, création...')
-
-        const { error: insertError } = await supabase.from('users').insert([
-          {
-            user_id: user.id,
-            bio: '',
-            subscription_price: 0,
-            avatar_url: '',
-            created_at: new Date().toISOString(),
-          },
-        ])
-
-        if (insertError) {
-          console.error('Erreur lors de la création du profil :', insertError.message || insertError)
-          return
-        }
-
-        const { data: newProfiles, error: fetchError } = await supabase
+        // double vérif pour éviter les doublons
+        const { data: alreadyExists } = await supabase
           .from('users')
-          .select('*')
+          .select('id')
           .eq('user_id', user.id)
           .limit(1)
 
-        console.log('Résultat fetch après insert :', newProfiles)
+        if (!alreadyExists || alreadyExists.length === 0) {
+          const { error: insertError } = await supabase.from('users').insert([
+            {
+              user_id: user.id,
+              bio: '',
+              subscription_price: 0,
+              avatar_url: '',
+              username: user.user_metadata?.username || 'Utilisateur',
+              created_at: new Date().toISOString(),
+            },
+          ])
 
-        if (fetchError || !newProfiles || newProfiles.length === 0) {
-          console.error('Erreur après création :', fetchError || 'Profil introuvable')
-          return
+          if (insertError) {
+            console.error('Erreur lors de la création du profil :', insertError.message || insertError)
+            return
+          }
         }
-
-        profileData = newProfiles
       }
 
-      setProfile(profileData[0])
+      const { data: refreshedProfile, error: refreshedError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('user_id', user.id)
+        .limit(1)
+
+      if (refreshedError || !refreshedProfile || refreshedProfile.length === 0) {
+        console.error('Erreur après création :', refreshedError || 'Profil introuvable')
+        return
+      }
+
+      setProfile(refreshedProfile[0])
+      setUsername(refreshedProfile[0].username || '')
 
       const { data: contentData, error: contentError } = await supabase
         .from('contents')
@@ -77,10 +84,8 @@ export default function ProfilePage() {
         .order('created_at', { ascending: false })
 
       if (contentError) {
-        console.error('Erreur lors de la récupération des contenus :', contentError.message)
+        console.error('Erreur contenus :', contentError)
       }
-
-      console.log('Contenus récupérés :', contentData)
 
       setContents(contentData || [])
     }
@@ -93,8 +98,8 @@ export default function ProfilePage() {
       <div className="pt-4">
         <div className="flex justify-between items-center px-4">
           <div className="text-sm">
-            <div className="text-xl font-bold">0 abonnés</div>
-            <div className="text-zinc-400">0 abonnements</div>
+            <div className="text-xl font-bold">@{username || 'Profil'}</div>
+            <div className="text-zinc-400">0 abonnés · 0 abonnements</div>
           </div>
           <div>
             {profile?.avatar_url ? (

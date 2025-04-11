@@ -16,43 +16,44 @@ export default function AuthForm() {
     e.preventDefault()
     setError('')
 
+    if (!email || !password || (!isLogin && !username)) {
+      setError('Tous les champs sont requis.')
+      return
+    }
+
     if (isLogin) {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) {
-        setError(error.message)
+        setError('Identifiants invalides ou email non confirmé.')
       } else {
         router.push('/profile')
       }
     } else {
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      const { error: signUpError } = await supabase.auth.signUp({
         email,
-        password
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: { username },
+        },
       })
 
       if (signUpError) {
         setError(signUpError.message)
       } else {
-        const user = data.user
-        if (user) {
-          await supabase.from('users').insert([
-            {
-              user_id: user.id,
-              username
-            }
-          ])
-        }
-        router.push('/profile')
+        alert('📨 Vérifie ta boîte mail pour confirmer ton compte.')
+        setIsLogin(true)
       }
     }
   }
 
   return (
-    <div className="max-w-md mx-auto">
-      <h2 className="text-xl font-bold mb-4">{isLogin ? 'Connexion' : 'Inscription'}</h2>
+    <div className="max-w-md mx-auto p-4">
+      <h2 className="text-xl font-bold mb-4 text-white">{isLogin ? 'Connexion' : 'Inscription'}</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         {!isLogin && (
           <input
-            className="border p-2 w-full"
+            className="border p-2 w-full text-white bg-zinc-900 placeholder-zinc-400"
             type="text"
             placeholder="Nom d'utilisateur"
             value={username}
@@ -60,26 +61,29 @@ export default function AuthForm() {
           />
         )}
         <input
-          className="border p-2 w-full"
+          className="border p-2 w-full text-white bg-zinc-900 placeholder-zinc-400"
           type="email"
           placeholder="Adresse email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
         <input
-          className="border p-2 w-full"
+          className="border p-2 w-full text-white bg-zinc-900 placeholder-zinc-400"
           type="password"
           placeholder="Mot de passe"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        <button className="bg-black text-white p-2 w-full rounded" type="submit">
+        <button className="bg-violet-600 hover:bg-violet-500 text-white p-2 w-full rounded" type="submit">
           {isLogin ? 'Se connecter' : 'Créer un compte'}
         </button>
-        <p onClick={() => setIsLogin(!isLogin)} className="text-blue-600 cursor-pointer text-sm">
+        <p
+          onClick={() => setIsLogin(!isLogin)}
+          className="text-blue-400 cursor-pointer text-sm underline text-center"
+        >
           {isLogin ? "Pas encore de compte ? S'inscrire" : 'Déjà inscrit ? Se connecter'}
         </p>
-        {error && <p className="text-red-500">{error}</p>}
+        {error && <p className="text-red-500 text-sm text-center">{error}</p>}
       </form>
     </div>
   )
