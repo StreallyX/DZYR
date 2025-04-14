@@ -12,10 +12,14 @@ export default function SearchPage() {
   useEffect(() => {
     const search = async () => {
       if (query.length < 2) return setResults([])
-      const { data } = await supabase
+
+      const { data, error } = await supabase
         .from('users')
         .select('*')
         .ilike('username', `%${query}%`)
+
+      console.log('Query:', query)
+      console.log('Résultats de recherche :', data, error)
       setResults(data || [])
     }
 
@@ -25,24 +29,24 @@ export default function SearchPage() {
 
   return (
     <ProtectedRoute>
-    <div className="pt-4">
-      <input
-        type="text"
-        placeholder="Rechercher un créateur..."
-        className="w-full border p-2 rounded mb-4"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
-      <div>
-        {results.map((user) => (
-          <Link key={user.id} href={`/creator/${user.username}`}>
-            <div className="bg-white p-4 rounded shadow mb-2 hover:shadow-md">
-              @{user.username}
-            </div>
-          </Link>
-        ))}
+      <div className="pt-4 px-4">
+        <input
+          type="text"
+          placeholder="Rechercher un créateur..."
+          className="w-full border border-zinc-700 bg-zinc-900 text-white p-2 rounded mb-4"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <div>
+          {results.map((user) => (
+            <Link key={user.user_id} href={`/creator/${user.username}`}>
+              <div className="bg-zinc-800 text-white p-4 rounded shadow mb-2 hover:shadow-md">
+                @{user.username}
+              </div>
+            </Link>
+          ))}
+        </div>
       </div>
-    </div>
     </ProtectedRoute>
   )
 }
