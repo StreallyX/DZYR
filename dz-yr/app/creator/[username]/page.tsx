@@ -32,14 +32,21 @@ export default function CreatorProfilePage() {
 
       // Check abonnement
       if (user) {
-        const { data: sub } = await supabase
+        const { data: subs, error } = await supabase
           .from('subscriptions')
           .select('*')
           .eq('creator_id', profileData.id)
           .eq('subscriber_id', user.id)
-          .maybeSingle()
 
-        if (sub) setIsSubscribed(true)
+        const now = new Date()
+        const hasValidSubscription = (subs || []).some(sub => {
+          return sub.end_date && new Date(sub.end_date) > now
+        })
+
+        if (hasValidSubscription) {
+          setIsSubscribed(true)
+        }
+
       }
 
       const { data: contentData } = await supabase
@@ -80,7 +87,6 @@ export default function CreatorProfilePage() {
         isSubscribed={isSubscribed}
         onSubscribe={() => console.log('TODO: Gérer abonnement')}
       />
-
 
       <div className="space-y-2">
         {contents.map((item) => {
