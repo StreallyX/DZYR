@@ -40,10 +40,36 @@ export default function AuthForm() {
 
       if (signUpError) {
         setError(signUpError.message)
-      } else {
+      } 
+      else {
+        const { data: userData, error: sessionError } = await supabase.auth.getUser()
+      
+        if (sessionError || !userData?.user) {
+          setError("Erreur : impossible de récupérer l'utilisateur.")
+          return
+        }
+      
+        const userId = userData.user.id
+      
+        const { error: insertError } = await supabase.from('users').insert([
+          {
+            id: userId,
+            username,
+            bio: '',
+            subscription_price: 0,
+            avatar_url: '',
+          },
+        ])
+      
+        if (insertError) {
+          setError("Erreur lors de la création du profil : " + insertError.message)
+          return
+        }
+      
         alert('📨 Vérifie ta boîte mail pour confirmer ton compte.')
         setIsLogin(true)
       }
+      
     }
   }
 

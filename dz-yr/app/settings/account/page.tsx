@@ -20,7 +20,7 @@ export default function AccountSettingsPage() {
       const { data: profileData, error } = await supabase
         .from('users')
         .select('*')
-        .eq('user_id', userId)
+        .eq('id', userId)
         .limit(1)
 
       if (error || !profileData || profileData.length === 0) {
@@ -45,7 +45,7 @@ export default function AccountSettingsPage() {
 
     if (avatar) {
       const fileExt = avatar.name.split('.').pop()
-      const fileName = `${profile.user_id}-${Date.now()}.${fileExt}`
+      const fileName = `${profile.id}-${Date.now()}.${fileExt}`
       const filePath = `avatars/${fileName}`
 
       const { error: uploadError } = await supabase.storage
@@ -71,7 +71,7 @@ export default function AccountSettingsPage() {
         subscription_price: Number(price),
         avatar_url,
       })
-      .eq('user_id', profile.user_id)
+      .eq('id', profile.id)
 
     if (updateError) {
       console.error('Erreur mise à jour profil :', updateError)
@@ -83,6 +83,9 @@ export default function AccountSettingsPage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
+    localStorage.removeItem('supabase.auth.token')
+    localStorage.removeItem('supabase.auth.token_refreshing') // par sécurité
+
     window.location.href = '/' // Redirection
   }
 

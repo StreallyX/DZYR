@@ -21,78 +21,55 @@ export default function ProfilePage() {
         data: { user },
         error: authError,
       } = await supabase.auth.getUser()
+  
+      if (authError || !user) {
+        console.error('Utilisateur non connecté')
+        router.push('/auth/login')
+        return
+      } await supabase.auth.getUser()
 
+      console.log("USER.ID =", user.id)
+
+      const { data: rawUsers } = await supabase.from('users').select('*')
+      console.log("TOUS LES UTILISATEURS:", rawUsers)
+
+
+  
       if (authError || !user) {
         console.error('Utilisateur non connecté')
         router.push('/auth/login')
         return
       }
-
+  
       setUserId(user.id)
-
+  
+      // 🛠️ Ne tente jamais de créer un profil ici
       const { data: profileData, error: profileError } = await supabase
         .from('users')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('id', user.id)
         .limit(1)
-
-      if (profileError) {
-        console.error('Erreur récupération profil :', profileError)
+  
+      if (profileError || !profileData || profileData.length === 0) {
+        console.error('Erreur récupération profil (ou profil introuvable) :', profileError)
         return
       }
-
-      if (!profileData || profileData.length === 0) {
-        const { data: alreadyExists } = await supabase
-          .from('users')
-          .select('id')
-          .eq('user_id', user.id)
-          .limit(1)
-
-        if (!alreadyExists || alreadyExists.length === 0) {
-          const { error: insertError } = await supabase.from('users').insert([
-            {
-              user_id: user.id,
-              bio: '',
-              subscription_price: 0,
-              avatar_url: '',
-              username: user.user_metadata?.username || 'Utilisateur',
-              created_at: new Date().toISOString(),
-            },
-          ])
-
-          if (insertError) {
-            console.error('Erreur lors de la création du profil :', insertError.message || insertError)
-            return
-          }
-        }
-      }
-
-      const { data: refreshedProfile, error: refreshedError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('user_id', user.id)
-        .limit(1)
-
-      if (refreshedError || !refreshedProfile || refreshedProfile.length === 0) {
-        console.error('Erreur après création :', refreshedError || 'Profil introuvable')
-        return
-      }
-
-      setProfile(refreshedProfile[0])
-      setUsername(refreshedProfile[0].username || '')
-
+  
+      setProfile(profileData[0])
+      setUsername(profileData[0].username || '')
+  
       const { data: contentData, error: contentError } = await supabase
         .from('contents')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('id', user.id)
         .order('created_at', { ascending: false })
-
+  
       if (contentError) {
         console.error('Erreur contenus :', contentError)
       }
-
+  
       setContents(contentData || [])
-
+  
       const signed: Record<string, string> = {}
       for (const item of contentData || []) {
         if (!item.media_path) continue
@@ -105,11 +82,12 @@ export default function ProfilePage() {
       }
       setSignedUrls(signed)
     }
-
+  
     fetchProfileAndContents()
   }, [router])
+  
 
-  const isOwnProfile = profile?.user_id === userId
+  const isOwnProfile = profile?.id === userId
 
   return (
     <ProtectedRoute>
