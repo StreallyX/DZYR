@@ -8,52 +8,57 @@ type Props = {
 
 export default function CreatorProfileHeader({ profile, isSubscribed, onSubscribe }: Props) {
   return (
-    <div className="mb-4 relative">
+    <div className="mb-8 relative">
+
       {/* Bannière */}
-      <div className="h-36 w-full bg-zinc-700 rounded-md mb-4 overflow-hidden">
+      <div className="h-36 w-full bg-zinc-700 rounded-md overflow-hidden relative">
         {profile.banner_url && (
           <Image src={profile.banner_url} alt="banner" fill className="object-cover" />
         )}
       </div>
 
-      <div className="flex justify-between items-start">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold">@{profile.username}</h1>
-            {!isSubscribed && profile.subscription_price > 0 && (
-              <button
-                onClick={onSubscribe}
-                className="bg-black text-white text-sm px-3 py-1 rounded font-bold hover:bg-gray-800"
-              >
-                SUBSCRIBE {profile.subscription_price.toFixed(2)}$ / Month
-              </button>
-            )}
-          </div>
-          <p className="text-gray-400 text-sm italic">{profile.bio ?? 'Aucune bio.'}</p>
+      {/* Avatar superposé */}
+      <div className="absolute top-20 left-4 w-24 h-24 rounded-full border-4 border-white overflow-hidden bg-zinc-700">
+        {profile.avatar_url ? (
+          <Image
+            src={profile.avatar_url}
+            alt="avatar"
+            width={96}
+            height={96}
+            className="object-cover w-full h-full"
+          />
+        ) : null}
+      </div>
 
-          <div className="text-sm text-gray-400 mt-1">
-            <span>{profile.total_contents ?? 0} Contents</span> ·{' '}
-            <span>{profile.total_subs ?? 0} Subs</span> ·{' '}
-            <span>{profile.total_follow ?? 0} Follow</span>
-          </div>
+      {/* Contenu sous la bannière */}
+      <div className="mt-16 pl-4 pr-4">
+
+        <div className="text-sm text-gray-400 flex gap-4 mb-2">
+          <span>{profile.total_contents ?? 0} Contents</span>
+          <span>{profile.total_subs ?? 0} Subs</span>
+          <span>{profile.total_follow ?? 0} Follow</span>
         </div>
 
-        <div className="flex flex-col items-end gap-2">
-          {profile.avatar_url ? (
-            <Image
-              src={profile.avatar_url}
-              alt="avatar"
-              width={64}
-              height={64}
-              className="rounded-full object-cover"
-            />
-          ) : (
-            <div className="w-16 h-16 bg-zinc-700 rounded-full" />
-          )}
-          <button className="bg-pink-600 text-white text-sm px-4 py-1 rounded hover:bg-pink-500">
+        <p className="text-gray-400 text-sm italic mb-4">{profile.bio ?? 'Aucune bio.'}</p>
+
+        {/* Boutons */}
+        {!isSubscribed && profile.subscription_price > 0 ? (
+          <div className="flex gap-2">
+            <button
+              onClick={onSubscribe}
+              className="bg-black text-white text-sm px-4 py-2 rounded font-bold hover:bg-gray-800 w-1/2"
+            >
+              SUBSCRIBE {profile.subscription_price.toFixed(2)}$ / Month
+            </button>
+            <button className="bg-pink-600 text-white text-sm px-4 py-2 rounded font-bold hover:bg-pink-500 w-1/2">
+              SHOP
+            </button>
+          </div>
+        ) : (
+          <button className="bg-pink-600 text-white text-sm px-4 py-2 rounded font-bold hover:bg-pink-500 w-full">
             SHOP
           </button>
-        </div>
+        )}
       </div>
     </div>
   )
