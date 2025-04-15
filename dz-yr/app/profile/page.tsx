@@ -61,7 +61,7 @@ export default function ProfilePage() {
       const { data: contentData, error: contentError } = await supabase
         .from('contents')
         .select('*')
-        .eq('id', user.id)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false })
   
       if (contentError) {

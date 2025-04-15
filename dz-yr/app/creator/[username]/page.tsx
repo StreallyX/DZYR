@@ -35,7 +35,7 @@ export default function CreatorProfilePage() {
         const { data: sub } = await supabase
           .from('subscriptions')
           .select('*')
-          .eq('creator_id', profileData.user_id)
+          .eq('creator_id', profileData.id)
           .eq('subscriber_id', user.id)
           .maybeSingle()
 
@@ -45,7 +45,7 @@ export default function CreatorProfilePage() {
       const { data: contentData } = await supabase
         .from('contents')
         .select('*')
-        .eq('user_id', profileData.user_id)
+        .eq('user_id', profileData.id)
         .order('created_at', { ascending: false })
 
       setContents(contentData || [])

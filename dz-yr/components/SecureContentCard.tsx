@@ -68,7 +68,7 @@ export default function SecureContentCard({ item, blob }: Props) {
       const { data: userProfile } = await supabase
         .from('users')
         .select('username')
-        .eq('user_id', uid)
+        .eq('id', uid)
         .single()
 
       setUser({ id: uid, username: userProfile?.username || 'unknown' })

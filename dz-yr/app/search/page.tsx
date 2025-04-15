@@ -39,7 +39,7 @@ export default function SearchPage() {
         />
         <div>
           {results.map((user) => (
-            <Link key={user.user_id} href={`/creator/${user.username}`}>
+            <Link key={user.id} href={`/creator/${user.username}`}>
               <div className="bg-zinc-800 text-white p-4 rounded shadow mb-2 hover:shadow-md">
                 @{user.username}
               </div>

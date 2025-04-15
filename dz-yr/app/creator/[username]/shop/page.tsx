@@ -17,7 +17,7 @@ export default function ShopPage() {
       // 1. Récupère le créateur
       const { data: user } = await supabase
         .from('users')
-        .select('user_id')
+        .select('id')
         .eq('username', username)
         .single()
 
@@ -27,7 +27,7 @@ export default function ShopPage() {
       const { data: contents } = await supabase
         .from('contents')
         .select('*')
-        .eq('user_id', user.user_id)
+        .eq('user_id', user.id)
         .eq('is_shop_item', true)
 
       setShopContents(contents || [])
