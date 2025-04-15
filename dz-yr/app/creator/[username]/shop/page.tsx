@@ -55,12 +55,23 @@ export default function ShopPage() {
     const session = await supabase.auth.getSession()
     const userId = session.data.session?.user.id
     if (!userId) return alert('Non connecté')
-
+  
+    // 🚧 SIMULATION ACTUELLE
+    // 👉 Ceci est à remplacer plus tard par une redirection Vendo
     await supabase.from('purchases').insert({ user_id: userId, content_id: contentId })
+  
+    // ✅ Tu feras ceci seulement APRÈS validation réelle du paiement Vendo
     setMyPurchases((prev) => [...prev, contentId])
     setSelected(null)
     alert('Achat effectué ✅')
+  
+    // 🔁 PLUS TARD (Vendo) :
+    // - Tu rediriges ici vers l’URL de checkout Vendo
+    //   par ex: window.location.href = `https://vendo-services.com/pay?user=${userId}&content=${contentId}`
+    // - Tu crées un Webhook ou une page `/payment/success?content_id=XXX`
+    // - Sur cette page, tu insères dans Supabase si le paiement est OK
   }
+  
 
   return (
     <div className="max-w-xl mx-auto px-4 py-6">

@@ -8,6 +8,7 @@ type Props = {
   isSubscribed: boolean
   onSubscribe?: () => void
   onShopClick?: () => void
+  onWriteClick?: () => void // 👈 Ajout pour ouvrir le chat
 }
 
 export default function CreatorProfileHeader({
@@ -15,6 +16,7 @@ export default function CreatorProfileHeader({
   isSubscribed,
   onSubscribe,
   onShopClick,
+  onWriteClick,
 }: Props) {
   const router = useRouter()
 
@@ -24,6 +26,18 @@ export default function CreatorProfileHeader({
     } else {
       router.push(`/creator/${profile.username}/shop`)
     }
+  }
+
+  const goToChat = () => {
+    if (onWriteClick) {
+      onWriteClick()
+    } else {
+      router.push(`/messages/${profile.id}`) // 💬 Redirige vers la conversation
+    }
+  }
+
+  const handleSubscribe = () => {
+    router.push(`/payment/subscribe/${profile.id}`)
   }
 
   return (
@@ -58,14 +72,14 @@ export default function CreatorProfileHeader({
 
         <p className="text-gray-400 text-sm italic mb-4">{profile.bio ?? 'Aucune bio.'}</p>
 
-        {/* Boutons */}
-        {!isSubscribed && profile.subscription_price > 0 ? (
+        {/* BOUTONS */}
+        {isSubscribed ? (
           <div className="flex gap-2">
             <button
-              onClick={onSubscribe}
+              onClick={goToChat}
               className="bg-black text-white text-sm px-4 py-2 rounded font-bold hover:bg-gray-800 w-1/2"
             >
-              SUBSCRIBE {profile.subscription_price.toFixed(2)}$ / Month
+              WRITE
             </button>
             <button
               onClick={goToShop}
@@ -75,12 +89,20 @@ export default function CreatorProfileHeader({
             </button>
           </div>
         ) : (
-          <button
-            onClick={goToShop}
-            className="bg-pink-600 text-white text-sm px-4 py-2 rounded font-bold hover:bg-pink-500 w-full"
-          >
-            SHOP
-          </button>
+          <div className="flex gap-2">
+            <button
+                onClick={handleSubscribe}
+                className="bg-black text-white text-sm px-4 py-2 rounded font-bold hover:bg-gray-800 w-1/2"
+                >
+                SUBSCRIBE {profile.subscription_price.toFixed(2)}$ / Month
+            </button>
+            <button
+              onClick={goToShop}
+              className="bg-pink-600 text-white text-sm px-4 py-2 rounded font-bold hover:bg-pink-500 w-1/2"
+            >
+              SHOP
+            </button>
+          </div>
         )}
       </div>
     </div>
