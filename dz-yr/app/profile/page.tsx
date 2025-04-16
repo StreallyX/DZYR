@@ -8,12 +8,14 @@ import ProtectedRoute from '@/components/ProtectedRoute'
 import ProfileHeader from '@/components/ProfileHeader'
 import ProfileActions from '@/components/ProfileActions'
 import ContentFeed from '@/components/ContentFeed'
+import SecureContentCard from '@/components/SecureContentCard'
+import { Modal } from '@/components/ui/Modal'
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null)
   const [contents, setContents] = useState<any[]>([])
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
-  const [username, setUsername] = useState('')
+  const [blobs, setBlobs] = useState<Record<string, Blob>>({})
   const [userId, setUserId] = useState('')
   const [selectedItem, setSelectedItem] = useState<any>(null)
 
@@ -34,16 +36,14 @@ export default function ProfilePage() {
         .from('users')
         .select('*')
         .eq('id', user.id)
-        .limit(1)
+        .single()
 
-      if (profileError || !profileData || profileData.length === 0) {
+      if (profileError || !profileData) {
         console.error('Erreur récupération profil :', profileError)
         return
       }
 
-      const profile = profileData[0]
-      setProfile(profile)
-      setUsername(profile.username || '')
+      setProfile(profileData)
 
       const { data: contentData, error: contentError } = await supabase
         .from('contents')
@@ -53,21 +53,40 @@ export default function ProfilePage() {
 
       if (contentError) {
         console.error('Erreur contenus :', contentError)
+        return
       }
 
       setContents(contentData || [])
 
+      const token = (await supabase.auth.getSession()).data.session?.access_token
+
       const signed: Record<string, string> = {}
+      const blobsMap: Record<string, Blob> = {}
+
       for (const item of contentData || []) {
-        if (!item.media_path) continue
+        if (!item.media_path || !token) continue
+
+        // Génère l’URL signée
         const { data: signedUrlData } = await supabase.storage
           .from('contents')
           .createSignedUrl(item.media_path, 60)
+
         if (signedUrlData?.signedUrl) {
           signed[item.id] = signedUrlData.signedUrl
         }
+
+        // Charge le blob pour affichage sécurisé
+        const res = await fetch(`/api/protected-image?path=${item.media_path}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (res.ok) {
+          blobsMap[item.id] = await res.blob()
+        }
       }
+
       setSignedUrls(signed)
+      setBlobs(blobsMap)
     }
 
     fetchData()
@@ -91,52 +110,19 @@ export default function ProfilePage() {
             <ContentFeed
               contents={contents}
               signedUrls={signedUrls}
-              isOwnProfile={isOwnProfile}
-              onSelect={(item) => setSelectedItem(item)}
+              blobMap={blobs}
+              isOwnProfile={true}
+              creator={profile}
             />
+
           </>
         )}
 
-        {/* Modal d’aperçu du contenu */}
-        {selectedItem && (
-          <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
-            <div className="bg-zinc-900 p-4 rounded shadow-lg w-full max-w-md relative">
-              <button
-                onClick={() => setSelectedItem(null)}
-                className="absolute top-2 right-2 text-white text-xl"
-              >
-                ×
-              </button>
-              {signedUrls[selectedItem.id] && (
-                <img
-                  src={signedUrls[selectedItem.id]}
-                  alt="media"
-                  className="w-full h-auto rounded mb-4"
-                />
-              )}
-              <p className="text-sm text-white mb-2">{selectedItem.description}</p>
-              <p className="text-xs text-gray-400 mb-2">
-                {selectedItem.sub_required
-                  ? 'Abonnement requis'
-                  : selectedItem.is_free
-                  ? 'Gratuit'
-                  : `${selectedItem.price} €`}
-              </p>
-              {isOwnProfile && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => router.push(`/profile/edit/${selectedItem.id}`)}
-                    className="bg-blue-600 text-white px-4 py-1 rounded text-sm"
-                  >
-                    Modifier
-                  </button>
-                  <button className="bg-red-600 text-white px-4 py-1 rounded text-sm">
-                    Supprimer
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+        {/* Modal sécurisé */}
+        {selectedItem && blobs[selectedItem.id] && (
+          <Modal onClose={() => setSelectedItem(null)}>
+            <SecureContentCard item={selectedItem} blob={blobs[selectedItem.id]} />
+          </Modal>
         )}
       </div>
     </ProtectedRoute>
