@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import CreatorProfileHeader from '@/components/CreatorProfileHeader'
 import ContentCard from '@/components/ContentCard'
@@ -14,6 +14,8 @@ export default function CreatorProfilePage() {
   const [blobs, setBlobs] = useState<Record<string, Blob>>({})
   const [selectedItem, setSelectedItem] = useState<any>(null)
   const [isSubscribed, setIsSubscribed] = useState<boolean>(false)
+  const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null)
+  const router = useRouter()
 
   useEffect(() => {
     const fetchData = async () => {
@@ -30,23 +32,22 @@ export default function CreatorProfilePage() {
       const user = session.data.session?.user
       const token = session.data.session?.access_token
 
-      // Check abonnement
       if (user) {
-        const { data: subs, error } = await supabase
+        const { data: subs } = await supabase
           .from('subscriptions')
           .select('*')
           .eq('creator_id', profileData.id)
           .eq('subscriber_id', user.id)
 
         const now = new Date()
-        const hasValidSubscription = (subs || []).some(sub => {
-          return sub.end_date && new Date(sub.end_date) > now
-        })
+        const validSub = (subs || []).find(
+          (sub) => sub.end_date && new Date(sub.end_date) > now
+        )
 
-        if (hasValidSubscription) {
+        if (validSub) {
           setIsSubscribed(true)
+          setSubscriptionEndDate(validSub.end_date)
         }
-
       }
 
       const { data: contentData } = await supabase
@@ -78,6 +79,49 @@ export default function CreatorProfilePage() {
     if (username) fetchData()
   }, [username])
 
+  const handleWriteClick = async () => {
+    const session = await supabase.auth.getSession()
+    const user = session.data.session?.user
+    if (!user || !profile) return
+  
+    // Vérifie si une conversation existe déjà entre user et profile
+    const { data: convs, error: fetchError } = await supabase
+      .from('conversations')
+      .select('*')
+      .or(
+        `and(user1_id.eq.${user.id},user2_id.eq.${profile.id}),and(user1_id.eq.${profile.id},user2_id.eq.${user.id})`
+      )
+  
+    if (convs && convs.length > 0) {
+      router.push(`/messages/${convs[0].id}`)
+      return
+    }
+  
+    // Sinon, crée la conversation
+    const { data: newConv, error: insertError } = await supabase
+      .from('conversations')
+      .insert([
+        {
+          user1_id: user.id,
+          user2_id: profile.id,
+          last_message: '',
+          last_message_at: new Date().toISOString(),
+        },
+      ])
+      .select()
+      .single()
+  
+    if (insertError) {
+      console.error('Erreur insertion conversation:', insertError.message)
+      return
+    }
+  
+    if (newConv) {
+      router.push(`/messages/${newConv.id}`)
+    }
+  }
+  
+
   if (!profile) return <div>Chargement du créateur...</div>
 
   return (
@@ -85,7 +129,8 @@ export default function CreatorProfilePage() {
       <CreatorProfileHeader
         profile={profile}
         isSubscribed={isSubscribed}
-        onSubscribe={() => console.log('TODO: Gérer abonnement')}
+        subscriptionEndDate={subscriptionEndDate ?? undefined}
+        onWriteClick={handleWriteClick}
       />
 
       <div className="space-y-2">
