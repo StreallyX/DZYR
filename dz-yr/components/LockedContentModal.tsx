@@ -8,25 +8,52 @@ type Props = {
   item: any
   creator: any
   onClose: () => void
-  onUnlocked: () => void // Pour rafraîchir si débloqué
+  onUnlocked: () => void
 }
 
 export default function LockedContentModal({ item, creator, onClose, onUnlocked }: Props) {
   const [loading, setLoading] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
+  const [alreadyPurchased, setAlreadyPurchased] = useState(false)
+  const [alreadySubscribed, setAlreadySubscribed] = useState(false)
 
   useEffect(() => {
-    const getSession = async () => {
+    const checkAccess = async () => {
       const session = await supabase.auth.getSession()
       const uid = session.data.session?.user.id
       if (!uid) return onClose()
       setUserId(uid)
+
+      if (item.is_shop_item) {
+        const { data: purchase } = await supabase
+          .from('purchases')
+          .select('*')
+          .eq('user_id', uid)
+          .eq('content_id', item.id)
+          .single()
+
+        if (purchase) setAlreadyPurchased(true)
+      }
+
+      if (item.sub_required) {
+        const { data: sub } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('creator_id', creator.id)
+          .eq('subscriber_id', uid)
+          .single()
+
+        if (sub && new Date(sub.end_date) > new Date()) {
+          setAlreadySubscribed(true)
+        }
+      }
     }
-    getSession()
-  }, [onClose])
+
+    checkAccess()
+  }, [item, creator, onClose])
 
   const handleBuy = async () => {
-    if (!userId) return
+    if (!userId || alreadyPurchased) return
     setLoading(true)
 
     await supabase
@@ -40,7 +67,7 @@ export default function LockedContentModal({ item, creator, onClose, onUnlocked 
   }
 
   const handleSubscribe = async () => {
-    if (!userId) return
+    if (!userId || alreadySubscribed) return
     setLoading(true)
 
     const now = new Date()
@@ -67,23 +94,35 @@ export default function LockedContentModal({ item, creator, onClose, onUnlocked 
         <p className="text-sm text-zinc-400 mb-4">{item.description}</p>
 
         {item.is_shop_item && (
-          <button
-            onClick={handleBuy}
-            disabled={loading}
-            className="bg-pink-600 hover:bg-pink-500 text-white px-4 py-2 rounded w-full mb-2"
-          >
-            {loading ? 'Achat en cours...' : `Acheter pour ${item.price} €`}
-          </button>
+          alreadyPurchased ? (
+            <p className="bg-green-600 px-3 py-2 rounded text-center text-white font-semibold">
+              ✅ Déjà acheté
+            </p>
+          ) : (
+            <button
+              onClick={handleBuy}
+              disabled={loading}
+              className="bg-pink-600 hover:bg-pink-500 text-white px-4 py-2 rounded w-full mb-2"
+            >
+              {loading ? 'Achat en cours...' : `Acheter pour ${item.price} €`}
+            </button>
+          )
         )}
 
         {item.sub_required && !item.is_shop_item && (
-          <button
-            onClick={handleSubscribe}
-            disabled={loading}
-            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded w-full"
-          >
-            {loading ? 'Abonnement...' : `S’abonner à ${creator.subscription_price} €/mois`}
-          </button>
+          alreadySubscribed ? (
+            <p className="bg-green-600 px-3 py-2 rounded text-center text-white font-semibold">
+              ✅ Abonnement actif
+            </p>
+          ) : (
+            <button
+              onClick={handleSubscribe}
+              disabled={loading}
+              className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded w-full"
+            >
+              {loading ? 'Abonnement...' : `S’abonner à ${creator.subscription_price} €/mois`}
+            </button>
+          )
         )}
       </div>
     </Modal>
