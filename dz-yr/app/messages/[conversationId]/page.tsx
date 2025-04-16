@@ -141,7 +141,7 @@ export default function ConversationPage() {
         <div ref={bottomRef} />
       </div>
 
-      <div className="flex gap-2 fixed bottom-20 left-4 right-4 bg-white p-3 rounded-xl shadow-md">
+      <div className="flex gap-2 fixed bottom-6 left-4 right-4 bg-white p-3 rounded-xl shadow-md">
         <input
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
