@@ -3,19 +3,21 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+
 import CreatorProfileHeader from '@/components/CreatorProfileHeader'
-import ContentCard from '@/components/ContentCard'
-import ContentModal from '@/components/ContentModal'
+import ContentFeed from '@/components/ContentFeed'
 
 export default function CreatorProfilePage() {
   const { username } = useParams() as { username: string }
+  const router = useRouter()
+
   const [profile, setProfile] = useState<any>(null)
   const [contents, setContents] = useState<any[]>([])
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
   const [blobs, setBlobs] = useState<Record<string, Blob>>({})
-  const [selectedItem, setSelectedItem] = useState<any>(null)
   const [isSubscribed, setIsSubscribed] = useState<boolean>(false)
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null)
-  const router = useRouter()
+  const [userId, setUserId] = useState<string>('')
 
   useEffect(() => {
     const fetchData = async () => {
@@ -32,22 +34,23 @@ export default function CreatorProfilePage() {
       const user = session.data.session?.user
       const token = session.data.session?.access_token
 
-      if (user) {
-        const { data: subs } = await supabase
-          .from('subscriptions')
-          .select('*')
-          .eq('creator_id', profileData.id)
-          .eq('subscriber_id', user.id)
+      if (!user || !token) return
+      setUserId(user.id)
 
-        const now = new Date()
-        const validSub = (subs || []).find(
-          (sub) => sub.end_date && new Date(sub.end_date) > now
-        )
+      const { data: subs } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('creator_id', profileData.id)
+        .eq('subscriber_id', user.id)
 
-        if (validSub) {
-          setIsSubscribed(true)
-          setSubscriptionEndDate(validSub.end_date)
-        }
+      const now = new Date()
+      const validSub = (subs || []).find(
+        (sub) => sub.end_date && new Date(sub.end_date) > now
+      )
+
+      if (validSub) {
+        setIsSubscribed(true)
+        setSubscriptionEndDate(validSub.end_date)
       }
 
       const { data: contentData } = await supabase
@@ -58,69 +61,71 @@ export default function CreatorProfilePage() {
 
       setContents(contentData || [])
 
-      const newBlobs: Record<string, Blob> = {}
+      const signed: Record<string, string> = {}
+      const blobMap: Record<string, Blob> = {}
+
       for (const item of contentData || []) {
-        const canView = item.is_free || (item.sub_required && isSubscribed)
-        if (!item.media_path || !canView || !token) continue
+        const canView = item.is_free || (item.sub_required && validSub)
 
-        const res = await fetch(`/api/protected-image?path=${item.media_path}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        if (!item.media_path) continue
 
-        if (res.ok) {
-          const blob = await res.blob()
-          newBlobs[item.id] = blob
+        const { data: signedUrlData } = await supabase.storage
+          .from('contents')
+          .createSignedUrl(item.media_path, 60)
+
+        if (signedUrlData?.signedUrl) {
+          signed[item.id] = signedUrlData.signedUrl
+        }
+
+        if (canView) {
+          const res = await fetch(`/api/protected-image?path=${item.media_path}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+
+          if (res.ok) {
+            blobMap[item.id] = await res.blob()
+          }
         }
       }
 
-      setBlobs(newBlobs)
+      setSignedUrls(signed)
+      setBlobs(blobMap)
     }
 
     if (username) fetchData()
   }, [username])
 
   const handleWriteClick = async () => {
-    const session = await supabase.auth.getSession()
-    const user = session.data.session?.user
-    if (!user || !profile) return
-  
-    // Vérifie si une conversation existe déjà entre user et profile
-    const { data: convs, error: fetchError } = await supabase
+    if (!userId || !profile) return
+
+    const { data: convs } = await supabase
       .from('conversations')
       .select('*')
       .or(
-        `and(user1_id.eq.${user.id},user2_id.eq.${profile.id}),and(user1_id.eq.${profile.id},user2_id.eq.${user.id})`
+        `and(user1_id.eq.${userId},user2_id.eq.${profile.id}),and(user1_id.eq.${profile.id},user2_id.eq.${userId})`
       )
-  
+
     if (convs && convs.length > 0) {
       router.push(`/messages/${convs[0].id}`)
-      return
-    }
-  
-    // Sinon, crée la conversation
-    const { data: newConv, error: insertError } = await supabase
-      .from('conversations')
-      .insert([
-        {
-          user1_id: user.id,
-          user2_id: profile.id,
-          last_message: '',
-          last_message_at: new Date().toISOString(),
-        },
-      ])
-      .select()
-      .single()
-  
-    if (insertError) {
-      console.error('Erreur insertion conversation:', insertError.message)
-      return
-    }
-  
-    if (newConv) {
-      router.push(`/messages/${newConv.id}`)
+    } else {
+      const { data: newConv } = await supabase
+        .from('conversations')
+        .insert([
+          {
+            user1_id: userId,
+            user2_id: profile.id,
+            last_message: '',
+            last_message_at: new Date().toISOString(),
+          },
+        ])
+        .select()
+        .single()
+
+      if (newConv) {
+        router.push(`/messages/${newConv.id}`)
+      }
     }
   }
-  
 
   if (!profile) return <div>Chargement du créateur...</div>
 
@@ -133,27 +138,15 @@ export default function CreatorProfilePage() {
         onWriteClick={handleWriteClick}
       />
 
-      <div className="space-y-2">
-        {contents.map((item) => {
-          const canView = item.is_free || (item.sub_required && isSubscribed)
-          return (
-            <ContentCard
-              key={item.id}
-              item={item}
-              canView={canView}
-              onOpen={() => setSelectedItem(item)}
-            />
-          )
-        })}
-      </div>
-
-      {selectedItem && (
-        <ContentModal
-          item={selectedItem}
-          blob={blobs[selectedItem.id]}
-          onClose={() => setSelectedItem(null)}
-        />
-      )}
+      <ContentFeed
+        contents={contents}
+        signedUrls={signedUrls}
+        blobMap={blobs}
+        isOwnProfile={false}
+        purchasedIds={[]} // à intégrer si tu veux plus tard
+        isSubscribed={isSubscribed}
+        creator={profile}
+      />
     </div>
   )
 }
