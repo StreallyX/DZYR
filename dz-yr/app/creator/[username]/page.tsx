@@ -15,6 +15,7 @@ export default function CreatorProfilePage() {
   const [contents, setContents] = useState<any[]>([])
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
   const [blobs, setBlobs] = useState<Record<string, Blob>>({})
+  const [purchasedIds, setPurchasedIds] = useState<string[]>([])
   const [isSubscribed, setIsSubscribed] = useState<boolean>(false)
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null)
   const [userId, setUserId] = useState<string>('')
@@ -53,6 +54,13 @@ export default function CreatorProfilePage() {
         setSubscriptionEndDate(validSub.end_date)
       }
 
+      const { data: purchases } = await supabase
+        .from('purchases')
+        .select('content_id')
+        .eq('user_id', user.id)
+
+      setPurchasedIds(purchases?.map(p => p.content_id) || [])
+
       const { data: contentData } = await supabase
         .from('contents')
         .select('*')
@@ -65,7 +73,10 @@ export default function CreatorProfilePage() {
       const blobMap: Record<string, Blob> = {}
 
       for (const item of contentData || []) {
-        const canView = item.is_free || (item.sub_required && validSub)
+        const canView =
+          item.is_free ||
+          (item.sub_required && validSub) ||
+          (purchases?.some(p => p.content_id === item.id))
 
         if (!item.media_path) continue
 
@@ -143,7 +154,7 @@ export default function CreatorProfilePage() {
         signedUrls={signedUrls}
         blobMap={blobs}
         isOwnProfile={false}
-        purchasedIds={[]} // à intégrer si tu veux plus tard
+        purchasedIds={purchasedIds}
         isSubscribed={isSubscribed}
         creator={profile}
       />
