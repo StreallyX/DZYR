@@ -3,27 +3,27 @@
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Modal } from '@/components/ui/Modal'
-
+import ContentFeed from '@/components/ContentFeed'
 
 export default function ShopPage() {
   const { username } = useParams()
   const [shopContents, setShopContents] = useState<any[]>([])
-  const [myPurchases, setMyPurchases] = useState<string[]>([])
-  const [selected, setSelected] = useState<any>(null)
+  const [purchasedIds, setPurchasedIds] = useState<string[]>([])
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
+  const [blobs, setBlobs] = useState<Record<string, Blob>>({})
+  const [creator, setCreator] = useState<any>(null)
 
   useEffect(() => {
     const load = async () => {
-      // 1. Récupère le créateur
       const { data: user } = await supabase
         .from('users')
-        .select('id')
+        .select('*')
         .eq('username', username)
         .single()
 
       if (!user) return
+      setCreator(user)
 
-      // 2. Récupère tous les contenus shop
       const { data: contents } = await supabase
         .from('contents')
         .select('*')
@@ -32,84 +32,64 @@ export default function ShopPage() {
 
       setShopContents(contents || [])
 
-      // 3. Vérifie les achats du user connecté
       const session = await supabase.auth.getSession()
       const userId = session.data.session?.user.id
-
-      if (!userId) return
+      const token = session.data.session?.access_token
+      if (!userId || !token) return
 
       const { data: purchases } = await supabase
         .from('purchases')
         .select('content_id')
         .eq('user_id', userId)
 
-      setMyPurchases(purchases?.map((p) => p.content_id) || [])
+      const purchased = purchases?.map(p => p.content_id) || []
+      setPurchasedIds(purchased)
+
+      const signed: Record<string, string> = {}
+      const blobMap: Record<string, Blob> = {}
+
+      for (const item of contents || []) {
+        if (!item.media_path) continue
+
+        const { data: signedUrlData } = await supabase.storage
+          .from('contents')
+          .createSignedUrl(item.media_path, 60)
+
+        if (signedUrlData?.signedUrl) {
+          signed[item.id] = signedUrlData.signedUrl
+        }
+
+        if (purchased.includes(item.id)) {
+          const res = await fetch(`/api/protected-image?path=${item.media_path}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+
+          if (res.ok) {
+            blobMap[item.id] = await res.blob()
+          }
+        }
+      }
+
+      setSignedUrls(signed)
+      setBlobs(blobMap)
     }
 
     load()
   }, [username])
 
-  const alreadyBought = (id: string) => myPurchases.includes(id)
-
-  const handleBuy = async (contentId: string) => {
-    const session = await supabase.auth.getSession()
-    const userId = session.data.session?.user.id
-    if (!userId) return alert('Non connecté')
-  
-    // 🚧 SIMULATION ACTUELLE
-    // 👉 Ceci est à remplacer plus tard par une redirection Vendo
-    await supabase.from('purchases').insert({ user_id: userId, content_id: contentId })
-  
-    // ✅ Tu feras ceci seulement APRÈS validation réelle du paiement Vendo
-    setMyPurchases((prev) => [...prev, contentId])
-    setSelected(null)
-    alert('Achat effectué ✅')
-  
-    // 🔁 PLUS TARD (Vendo) :
-    // - Tu rediriges ici vers l’URL de checkout Vendo
-    //   par ex: window.location.href = `https://vendo-services.com/pay?user=${userId}&content=${contentId}`
-    // - Tu crées un Webhook ou une page `/payment/success?content_id=XXX`
-    // - Sur cette page, tu insères dans Supabase si le paiement est OK
-  }
-  
-
   return (
     <div className="max-w-xl mx-auto px-4 py-6">
-      <h1 className="text-2xl font-bold mb-4">Contenus à acheter de @{username}</h1>
+      <h1 className="text-2xl font-bold mb-4">🛒 Shop de @{username}</h1>
 
-      <div className="space-y-6">
-        {shopContents.map((item) => (
-          <div key={item.id} className="bg-zinc-800 rounded p-4">
-            <h2 className="font-semibold mb-1">{item.title}</h2>
-            <p className="text-sm text-zinc-300 mb-4 whitespace-pre-line">{item.description}</p>
-            {alreadyBought(item.id) ? (
-              <div className="bg-green-700 text-white px-3 py-1 rounded text-center">
-                ✅ Already Bought
-              </div>
-            ) : (
-              <button
-                onClick={() => setSelected(item)}
-                className="bg-pink-600 hover:bg-pink-500 text-white px-4 py-2 rounded w-full font-bold"
-              >
-                Acheter {item.price}$
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {selected && (
-        <Modal onClose={() => setSelected(null)}>
-          <h2 className="text-lg font-bold mb-2">{selected.title}</h2>
-          <p className="text-sm text-zinc-300 mb-4">{selected.description}</p>
-          <button
-            onClick={() => handleBuy(selected.id)}
-            className="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded w-full"
-          >
-            Payer {selected.price}$
-          </button>
-        </Modal>
-      )}
+      <ContentFeed
+        contents={shopContents}
+        signedUrls={signedUrls}
+        blobMap={blobs}
+        isOwnProfile={false}
+        isSubscribed={false}
+        purchasedIds={purchasedIds}
+        creator={creator}
+      />
     </div>
   )
 }
