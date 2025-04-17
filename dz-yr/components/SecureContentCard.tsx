@@ -8,9 +8,12 @@ type Props = {
     id: string
     title: string
     description?: string
+    media_type?: string
+    media_path: string // ✅ Ajoute cette ligne
   }
   blob: Blob
 }
+
 
 type Comment = {
   id: string
@@ -47,7 +50,6 @@ export default function SecureContentCard({ item, blob }: Props) {
         canvas.height = img.height
         ctx.drawImage(img, 0, 0)
 
-        // Optional watermark (light)
         ctx.font = '16px Arial'
         ctx.fillStyle = 'rgba(255, 255, 255, 0.3)'
         ctx.textAlign = 'right'
@@ -55,8 +57,10 @@ export default function SecureContentCard({ item, blob }: Props) {
       }
     }
 
-    drawCanvas()
-  }, [blob, user])
+    if (item.media_type !== 'video') {
+      drawCanvas()
+    }
+  }, [blob, user, item.media_type])
 
   useEffect(() => {
     const load = async () => {
@@ -152,11 +156,27 @@ export default function SecureContentCard({ item, blob }: Props) {
     <div className="relative">
       <h2 className="text-lg font-bold mb-2">{item.title}</h2>
 
-      {/* Canvas sécurisé */}
-      <div className="relative border border-zinc-700 rounded overflow-hidden mb-4 select-none pointer-events-none">
-        <canvas ref={canvasRef} className="w-full h-auto" />
-        {/* Overlay transparent anti-clic */}
-        <div className="absolute inset-0 z-10 pointer-events-none" />
+      <div className="relative border border-zinc-700 rounded overflow-hidden mb-4">
+      {item.media_type === 'video' ? (
+        <div className="relative group">
+          <video
+            controls
+            className="w-full rounded pointer-events-auto select-none"
+            onContextMenu={(e) => e.preventDefault()}
+            src={`/api/video/${item.id}`}
+          />
+
+          <div className="absolute bottom-2 right-3 text-xs text-white bg-black/40 px-2 py-1 rounded z-10 pointer-events-none">
+            @{user?.username ?? '...'} - DZYR
+          </div>
+        </div>
+      ) : (
+        <>
+          <canvas ref={canvasRef} className="w-full h-auto" />
+          <div className="absolute inset-0 z-10 pointer-events-none" />
+        </>
+      )}
+
       </div>
 
       {item.description && (
