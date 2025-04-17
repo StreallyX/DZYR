@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import SecureVideoPlayer from '@/components/SecureVideoPlayer'
+import SecureImageViewer from '@/components/SecureImageViewer'
 
 type Props = {
   item: {
@@ -9,11 +11,10 @@ type Props = {
     title: string
     description?: string
     media_type?: string
-    media_path: string // ✅ Ajoute cette ligne
+    media_path: string
   }
   blob: Blob
 }
-
 
 type Comment = {
   id: string
@@ -24,8 +25,7 @@ type Comment = {
   created_at: string
 }
 
-export default function SecureContentCard({ item, blob }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+export default function SecureContentCard({ item }: Props) {
   const [userId, setUserId] = useState<string | null>(null)
   const [user, setUser] = useState<{ id: string; username: string } | null>(null)
 
@@ -34,33 +34,6 @@ export default function SecureContentCard({ item, blob }: Props) {
 
   const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState('')
-
-  useEffect(() => {
-    const drawCanvas = async () => {
-      const img = new Image()
-      img.src = URL.createObjectURL(blob)
-      await new Promise((resolve) => (img.onload = resolve))
-
-      const canvas = canvasRef.current
-      if (canvas) {
-        const ctx = canvas.getContext('2d')
-        if (!ctx) return
-
-        canvas.width = img.width
-        canvas.height = img.height
-        ctx.drawImage(img, 0, 0)
-
-        ctx.font = '16px Arial'
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)'
-        ctx.textAlign = 'right'
-        ctx.fillText(`@${user?.username ?? '...'} - DZYR`, canvas.width - 10, canvas.height - 10)
-      }
-    }
-
-    if (item.media_type !== 'video') {
-      drawCanvas()
-    }
-  }, [blob, user, item.media_type])
 
   useEffect(() => {
     const load = async () => {
@@ -157,26 +130,11 @@ export default function SecureContentCard({ item, blob }: Props) {
       <h2 className="text-lg font-bold mb-2">{item.title}</h2>
 
       <div className="relative border border-zinc-700 rounded overflow-hidden mb-4">
-      {item.media_type === 'video' ? (
-        <div className="relative group">
-          <video
-            controls
-            className="w-full rounded pointer-events-auto select-none"
-            onContextMenu={(e) => e.preventDefault()}
-            src={`/api/video/${item.id}`}
-          />
-
-          <div className="absolute bottom-2 right-3 text-xs text-white bg-black/40 px-2 py-1 rounded z-10 pointer-events-none">
-            @{user?.username ?? '...'} - DZYR
-          </div>
-        </div>
-      ) : (
-        <>
-          <canvas ref={canvasRef} className="w-full h-auto" />
-          <div className="absolute inset-0 z-10 pointer-events-none" />
-        </>
-      )}
-
+        {item.media_type === 'video' ? (
+          <SecureVideoPlayer contentId={item.id} />
+        ) : (
+          <SecureImageViewer path={item.media_path} />
+        )}
       </div>
 
       {item.description && (
