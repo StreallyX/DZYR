@@ -1,19 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@supabase/supabase-js'
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, context: { params: { id: string } }) {
+  const { params } = context
   const contentId = params.id
   console.log("📥 Requête vidéo reçue pour ID :", contentId)
 
-  const session = await supabase.auth.getSession()
-  const user = session.data.session?.user
+  // 🔐 Lire le token envoyé depuis le client
+  const access_token = req.headers.get('Authorization')?.replace('Bearer ', '')
+  if (!access_token) {
+    console.log("⛔ Token manquant")
+    return NextResponse.json({ error: 'Non authentifié (pas de token)' }, { status: 401 })
+  }
+
+  // 🔗 Crée un client Supabase côté serveur avec le token utilisateur
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      global: {
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+        },
+      },
+    }
+  )
+
+  // 📡 Récupérer l'utilisateur
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+
   if (!user) {
-    console.log("⛔ Utilisateur non connecté")
+    console.log("⛔ Utilisateur non connecté via Supabase :", userError)
     return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
   }
+
   console.log("✅ Utilisateur connecté :", user.id)
 
-  // Récupérer le contenu
+  // 🎬 Charger le contenu
   const { data: content, error } = await supabase
     .from('contents')
     .select('*')
@@ -21,13 +44,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     .single()
 
   if (error || !content) {
-    console.log("❌ Contenu introuvable ou erreur DB :", error)
+    console.log("❌ Contenu introuvable :", error)
     return NextResponse.json({ error: 'Contenu introuvable' }, { status: 404 })
   }
 
-  console.log("🎬 Contenu trouvé :", content.media_path)
-
-  // Vérification d’accès
+  // 🔐 Vérification d’accès
   const isOwner = content.user_id === user.id
   const isFree = content.is_free
   const isSubRequired = content.sub_required
@@ -37,7 +58,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   if (isFree || isOwner) {
     hasAccess = true
-    console.log("✅ Accès autorisé (gratuit ou propriétaire)")
+    console.log("✅ Accès autorisé (gratuit ou créateur)")
   }
 
   if (!hasAccess && isSubRequired) {
@@ -52,8 +73,6 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     if (sub) {
       hasAccess = true
       console.log("✅ Accès autorisé via abonnement actif")
-    } else {
-      console.log("⛔ Pas d'abonnement actif")
     }
   }
 
@@ -68,8 +87,6 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     if (purchase) {
       hasAccess = true
       console.log("✅ Accès autorisé via achat")
-    } else {
-      console.log("⛔ Aucun achat trouvé")
     }
   }
 
@@ -78,12 +95,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
   }
 
+  // 🔑 Générer URL temporaire Supabase
   const { data: signed, error: signError } = await supabase.storage
     .from('contents')
     .createSignedUrl(content.media_path, 60)
 
   if (signError || !signed?.signedUrl) {
-    console.log("❌ Erreur génération signed URL :", signError)
+    console.log("❌ Erreur URL signée :", signError)
     return NextResponse.json({ error: 'Erreur URL signée' }, { status: 500 })
   }
 
