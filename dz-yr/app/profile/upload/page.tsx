@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
@@ -8,8 +8,7 @@ export default function UploadContentPage() {
   const [file, setFile] = useState<File | null>(null)
   const [description, setDescription] = useState('')
   const [price, setPrice] = useState(0)
-  const [isFree, setIsFree] = useState(false)
-  const [subRequired, setSubRequired] = useState(false)
+  const [accessType, setAccessType] = useState<'free' | 'subscription' | 'paid'>('free')
   const router = useRouter()
 
   const handleUpload = async () => {
@@ -23,6 +22,14 @@ export default function UploadContentPage() {
     const fileName = `${user.id}-${Date.now()}.${fileExt}`
     const filePath = fileName
 
+    // Détection image ou vidéo
+    const mimeType = file.type
+    const mediaType = mimeType.startsWith('image')
+      ? 'image'
+      : mimeType.startsWith('video')
+      ? 'video'
+      : 'other'
+
     const { error: uploadError } = await supabase.storage
       .from('contents')
       .upload(filePath, file, {
@@ -35,17 +42,19 @@ export default function UploadContentPage() {
       return
     }
 
-    const { error: insertError } = await supabase.from('contents').insert([
-      {
-        user_id: user.id,
-        description,
-        price,
-        is_free: isFree,
-        sub_required: subRequired,
-        media_path: filePath, // ⬅️ ceci est essentiel
-        created_at: new Date().toISOString(),
-      },
-    ])
+    const contentData = {
+      user_id: user.id,
+      description,
+      media_path: filePath,
+      media_type: mediaType,
+      created_at: new Date().toISOString(),
+      price: accessType === 'paid' ? price : 0,
+      is_free: accessType === 'free',
+      sub_required: accessType === 'subscription',
+      is_shop_item: accessType === 'paid',
+    }
+
+    const { error: insertError } = await supabase.from('contents').insert([contentData])
 
     if (insertError) {
       console.error('Erreur insertion DB :', insertError)
@@ -56,14 +65,21 @@ export default function UploadContentPage() {
   }
 
   return (
-    <div className="p-4">
-      <h1 className="text-xl font-bold mb-4">Ajouter un contenu</h1>
+    <div className="p-4 max-w-xl mx-auto">
+      <button
+        onClick={() => router.back()}
+        className="text-sm mb-4 text-white hover:underline"
+      >
+        ← Retour
+      </button>
+
+      <h1 className="text-xl font-bold mb-4 text-white">Ajouter un contenu</h1>
 
       <input
         type="file"
         accept="image/*,video/*"
         onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-        className="mb-4"
+        className="mb-4 text-white"
       />
 
       <textarea
@@ -74,36 +90,33 @@ export default function UploadContentPage() {
       />
 
       <label className="block text-sm text-white mb-2">
-        Prix (€)
-        <input
-          type="number"
-          value={price}
-          onChange={(e) => setPrice(Number(e.target.value))}
-          className="block w-full bg-zinc-800 p-2 rounded mt-1"
-        />
+        Type d'accès :
+        <select
+          value={accessType}
+          onChange={(e) => setAccessType(e.target.value as 'free' | 'subscription' | 'paid')}
+          className="block w-full bg-zinc-800 p-2 rounded mt-1 text-white"
+        >
+          <option value="free">Gratuit</option>
+          <option value="subscription">Abonnement requis</option>
+          <option value="paid">Payant à l’unité</option>
+        </select>
       </label>
 
-      <label className="block text-sm text-white mt-2">
-        <input
-          type="checkbox"
-          checked={isFree}
-          onChange={() => setIsFree(!isFree)}
-        />{' '}
-        Gratuit ?
-      </label>
-
-      <label className="block text-sm text-white mt-2">
-        <input
-          type="checkbox"
-          checked={subRequired}
-          onChange={() => setSubRequired(!subRequired)}
-        />{' '}
-        Abonnement requis ?
-      </label>
+      {accessType === 'paid' && (
+        <label className="block text-sm text-white mb-2">
+          Prix (€)
+          <input
+            type="number"
+            value={price}
+            onChange={(e) => setPrice(Number(e.target.value))}
+            className="block w-full bg-zinc-800 p-2 rounded mt-1"
+          />
+        </label>
+      )}
 
       <button
         onClick={handleUpload}
-        className="mt-4 bg-violet-600 text-white px-4 py-2 rounded"
+        className="mt-4 bg-violet-600 text-white px-4 py-2 rounded w-full"
       >
         Upload
       </button>
