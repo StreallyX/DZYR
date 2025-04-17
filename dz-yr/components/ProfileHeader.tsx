@@ -5,10 +5,9 @@ import Image from 'next/image'
 type Props = {
   profile: any
   isOwnProfile: boolean
-  onEditProfile: () => void
 }
 
-export default function ProfileHeader({ profile, isOwnProfile, onEditProfile }: Props) {
+export default function ProfileHeader({ profile, isOwnProfile }: Props) {
   const hasBanner = !!profile?.banner_url
 
   return (

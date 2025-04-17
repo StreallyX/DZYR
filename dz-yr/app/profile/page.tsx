@@ -102,7 +102,6 @@ export default function ProfilePage() {
             <ProfileHeader
               profile={profile}
               isOwnProfile={isOwnProfile}
-              onEditProfile={() => router.push('/settings/account')}
             />
 
             <ProfileActions showShopButton={true} />

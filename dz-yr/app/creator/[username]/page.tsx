@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
-import CreatorProfileHeader from '@/components/CreatorProfileHeader'
+import ProfileHeader from '@/components/ProfileHeader'
 import ContentFeed from '@/components/ContentFeed'
+import CreatorProfileActions from '@/components/CreatorProfileActions'
 
 export default function CreatorProfilePage() {
   const { username } = useParams() as { username: string }
@@ -106,8 +107,14 @@ export default function CreatorProfilePage() {
     if (username) fetchData()
   }, [username])
 
+  const handleSubscribeClick = () => {
+    if (!profile?.id) return
+    router.push(`/payment/subscribe/${profile.id}`)
+  }
+
   const handleWriteClick = async () => {
     if (!userId || !profile) return
+    
 
     const { data: convs } = await supabase
       .from('conversations')
@@ -142,12 +149,21 @@ export default function CreatorProfilePage() {
 
   return (
     <div className="p-4">
-      <CreatorProfileHeader
+
+
+      <ProfileHeader
+        profile={profile}
+        isOwnProfile={false}
+      />
+
+      <CreatorProfileActions
         profile={profile}
         isSubscribed={isSubscribed}
         subscriptionEndDate={subscriptionEndDate ?? undefined}
         onWriteClick={handleWriteClick}
+        onSubscribe={handleSubscribeClick}
       />
+
 
       <ContentFeed
         contents={contents}
