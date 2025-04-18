@@ -10,6 +10,27 @@ export default function ShopPage() {
   const [shopContents, setShopContents] = useState<any[]>([])
   const [viewer, setViewer] = useState<any>(null)
 
+  const refreshViewer = async (uid: string) => {
+    const { data: purchases } = await supabase
+      .from('purchases')
+      .select('content_id')
+      .eq('user_id', uid)
+
+    const { data: subscriptions } = await supabase
+      .from('subscriptions')
+      .select('creator_id, end_date')
+      .eq('subscriber_id', uid)
+
+    const now = new Date()
+    const validSubs = subscriptions?.filter((sub) => new Date(sub.end_date) > now) || []
+
+    setViewer({
+      id: uid,
+      purchasedContentIds: purchases?.map((p) => String(p.content_id)) || [],
+      subscribedTo: validSubs.map((sub) => sub.creator_id),
+    })
+  }
+
   useEffect(() => {
     const load = async () => {
       const { data: user } = await supabase
@@ -32,20 +53,10 @@ export default function ShopPage() {
       const currentUser = session.data.session?.user
       if (!currentUser) return
 
-      const { data: purchases } = await supabase
-        .from('purchases')
-        .select('content_id')
-        .eq('user_id', currentUser.id)
-
-      const purchased = purchases?.map(p => p.content_id) || []
-
-      setViewer({
-        id: currentUser.id,
-        purchasedContentIds: purchased,
-      })
+      await refreshViewer(currentUser.id)
     }
 
-    load()
+    if (username) load()
   }, [username])
 
   if (!viewer) return <div>Chargement...</div>
@@ -57,6 +68,7 @@ export default function ShopPage() {
       <ContentFeed
         contents={shopContents}
         viewer={viewer}
+        onRefresh={() => refreshViewer(viewer.id)}
       />
     </div>
   )

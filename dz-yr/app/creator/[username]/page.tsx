@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import ProfileHeader from '@/components/ProfileHeader'
 import ContentFeed from '@/components/ContentFeed'
 import CreatorProfileActions from '@/components/CreatorProfileActions'
+import ContentPreviewCard from '@/components/ContentPreviewCard'
 
 export default function CreatorProfilePage() {
   const { username } = useParams() as { username: string }
@@ -17,6 +18,34 @@ export default function CreatorProfilePage() {
   const [viewer, setViewer] = useState<any>(null)
   const [isSubscribed, setIsSubscribed] = useState<boolean>(false)
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null)
+
+  const refreshViewer = async (userId: string, creatorId: string) => {
+    const { data: purchases } = await supabase
+      .from('purchases')
+      .select('content_id')
+      .eq('user_id', userId)
+
+    const { data: subs } = await supabase
+      .from('subscriptions')
+      .select('creator_id, end_date')
+      .eq('subscriber_id', userId)
+
+    const now = new Date()
+    const validSubs = subs?.filter(sub => new Date(sub.end_date) > now) || []
+    const isSub = validSubs.some(sub => sub.creator_id === creatorId)
+
+    setIsSubscribed(isSub)
+    if (isSub) {
+      const sub = validSubs.find(sub => sub.creator_id === creatorId)
+      setSubscriptionEndDate(sub?.end_date ?? null)
+    }
+
+    setViewer({
+      id: userId,
+      subscribedTo: validSubs.map(sub => sub.creator_id),
+      purchasedContentIds: purchases?.map(p => p.content_id) || [],
+    })
+  }
 
   useEffect(() => {
     const fetchData = async () => {
@@ -33,26 +62,7 @@ export default function CreatorProfilePage() {
       const user = session.data.session?.user
       if (!user) return
 
-      const { data: subs } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('creator_id', profileData.id)
-        .eq('subscriber_id', user.id)
-
-      const now = new Date()
-      const validSub = (subs || []).find(
-        (sub) => sub.end_date && new Date(sub.end_date) > now
-      )
-
-      if (validSub) {
-        setIsSubscribed(true)
-        setSubscriptionEndDate(validSub.end_date)
-      }
-
-      const { data: purchases } = await supabase
-        .from('purchases')
-        .select('content_id')
-        .eq('user_id', user.id)
+      await refreshViewer(user.id, profileData.id)
 
       const { data: contentData } = await supabase
         .from('contents')
@@ -61,12 +71,6 @@ export default function CreatorProfilePage() {
         .order('created_at', { ascending: false })
 
       setContents(contentData || [])
-
-      setViewer({
-        id: user.id,
-        subscribedTo: validSub ? [profileData.id] : [],
-        purchasedContentIds: purchases?.map(p => p.content_id) || []
-      })
     }
 
     if (username) fetchData()
@@ -129,6 +133,7 @@ export default function CreatorProfilePage() {
       <ContentFeed
         contents={contents}
         viewer={viewer}
+        onRefresh={() => refreshViewer(viewer.id, profile.id)}
       />
     </div>
   )
