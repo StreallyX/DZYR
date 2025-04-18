@@ -14,6 +14,7 @@ interface Props {
 
 export default function ContentPreviewCard({ contentId, viewer, onUnlocked }: Props) {
   const [content, setContent] = useState<any>(null)
+  const [creator, setCreator] = useState<any>(null)
   const [signedUrl, setSignedUrl] = useState<string>('')
   const [blob, setBlob] = useState<Blob | null>(null)
   const [canView, setCanView] = useState<boolean>(false)
@@ -58,7 +59,6 @@ export default function ContentPreviewCard({ contentId, viewer, onUnlocked }: Pr
         const finalUrl = signed?.signedUrl ?? ''
         setSignedUrl(finalUrl)
 
-        // 🔐 On charge le blob SEULEMENT si l'utilisateur peut le voir
         if (canAccess && finalUrl) {
           const res = await fetch(finalUrl)
           const blobData = await res.blob()
@@ -69,6 +69,22 @@ export default function ContentPreviewCard({ contentId, viewer, onUnlocked }: Pr
 
     fetchData()
   }, [contentId, viewer])
+
+  useEffect(() => {
+    const fetchCreator = async () => {
+      if (!content?.user_id) return
+
+      const { data: creatorData } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', content.user_id)
+        .single()
+
+      setCreator(creatorData)
+    }
+
+    if (content?.user_id) fetchCreator()
+  }, [content])
 
   if (!content) return null
 
@@ -119,14 +135,14 @@ export default function ContentPreviewCard({ contentId, viewer, onUnlocked }: Pr
         </Modal>
       )}
 
-      {isOpen && !canView && (
+      {isOpen && !canView && creator && (
         <LockedContentModal
           item={content}
-          creator={{ username: 'creator' }}
+          creator={creator}
           onClose={handleClose}
           onUnlocked={onUnlocked || (() => {})}
         />
       )}
     </>
   )
-} 
+}
