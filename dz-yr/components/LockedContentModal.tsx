@@ -8,7 +8,7 @@ type Props = {
   item: any
   creator: any
   onClose: () => void
-  onUnlocked: () => void
+  onUnlocked?: () => void
 }
 
 export default function LockedContentModal({ item, creator, onClose, onUnlocked }: Props) {
@@ -25,25 +25,32 @@ export default function LockedContentModal({ item, creator, onClose, onUnlocked 
       setUserId(uid)
 
       if (item.is_shop_item) {
-        const { data: purchase } = await supabase
+        const { data: purchases, error } = await supabase
           .from('purchases')
-          .select('*')
-          .eq('user_id', uid)
-          .eq('content_id', item.id)
-          .single()
+          .select('id')
+          .match({
+            user_id: uid,
+            content_id: item.id,
+          })
 
-        if (purchase) setAlreadyPurchased(true)
+        if (error) console.error('Erreur achat check :', error)
+        if (purchases && purchases.length > 0) {
+          setAlreadyPurchased(true)
+        }
       }
 
       if (item.sub_required) {
-        const { data: sub } = await supabase
+        const { data: subs, error: subError } = await supabase
           .from('subscriptions')
-          .select('*')
-          .eq('creator_id', creator.id)
-          .eq('subscriber_id', uid)
-          .single()
+          .select('end_date')
+          .match({
+            creator_id: creator.id,
+            subscriber_id: uid,
+          })
 
-        if (sub && new Date(sub.end_date) > new Date()) {
+        if (subError) console.error('Erreur sub check :', subError)
+
+        if (subs && subs.length > 0 && new Date(subs[0].end_date) > new Date()) {
           setAlreadySubscribed(true)
         }
       }
@@ -56,12 +63,18 @@ export default function LockedContentModal({ item, creator, onClose, onUnlocked 
     if (!userId || alreadyPurchased) return
     setLoading(true)
 
-    await supabase
+    const { error } = await supabase
       .from('purchases')
       .insert({ user_id: userId, content_id: item.id })
 
+    if (error) {
+      console.error('Erreur achat :', error)
+      setLoading(false)
+      return
+    }
+
     setLoading(false)
-    onUnlocked()
+    onUnlocked?.()
     onClose()
     alert('✅ Contenu acheté avec succès.')
   }
@@ -73,7 +86,7 @@ export default function LockedContentModal({ item, creator, onClose, onUnlocked 
     const now = new Date()
     const nextMonth = new Date(now.setMonth(now.getMonth() + 1)).toISOString()
 
-    await supabase
+    const { error } = await supabase
       .from('subscriptions')
       .insert({
         subscriber_id: userId,
@@ -81,8 +94,14 @@ export default function LockedContentModal({ item, creator, onClose, onUnlocked 
         end_date: nextMonth,
       })
 
+    if (error) {
+      console.error('Erreur abonnement :', error)
+      setLoading(false)
+      return
+    }
+
     setLoading(false)
-    onUnlocked()
+    onUnlocked?.()
     onClose()
     alert('✅ Abonnement activé.')
   }
@@ -120,7 +139,7 @@ export default function LockedContentModal({ item, creator, onClose, onUnlocked 
               disabled={loading}
               className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded w-full"
             >
-              {loading ? 'Abonnement...' : `S’abonner à ${creator.subscription_price} €/mois`}
+              {loading ? 'Abonnement...' : `S’abonner à ${creator.subscription_price ?? '...'} €/mois`}
             </button>
           )
         )}
