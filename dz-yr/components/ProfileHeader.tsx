@@ -20,11 +20,14 @@ export default function ProfileHeader({ profile, isOwnProfile }: Props) {
       >
         {hasBanner && (
           <Image
-            src={profile.banner_url}
-            alt="Bannière"
-            fill
-            className="object-cover"
-          />
+          src={profile.banner_url}
+          alt="Bannière"
+          fill
+          sizes="(min-width: 768px) 576px, 100vw"
+          priority
+          className="object-cover"
+        />
+        
         )}
       </div>
 
@@ -35,6 +38,7 @@ export default function ProfileHeader({ profile, isOwnProfile }: Props) {
             src={profile.avatar_url}
             alt="Avatar"
             fill
+            sizes="96px" // 24 * 4 = 96px
             className="object-cover"
           />
         ) : (
@@ -52,14 +56,13 @@ export default function ProfileHeader({ profile, isOwnProfile }: Props) {
         </p>
 
         {typeof profile?.subscription_price === 'number' && (
-        <p className="text-sm text-violet-400 mt-1">
+          <p className="text-sm text-violet-400 mt-1">
             Abonnement :{' '}
             {profile.subscription_price === 0
-            ? 'Gratuit'
-            : `${profile.subscription_price.toFixed(2)} € / mois`}
-        </p>
+              ? 'Gratuit'
+              : `${profile.subscription_price.toFixed(2)} € / mois`}
+          </p>
         )}
-
       </div>
     </div>
   )
