@@ -1,36 +1,76 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
 import { Modal } from '@/components/ui/Modal'
 import SecureContentCard from '@/components/SecureContentCard'
 import LockedContentModal from '@/components/LockedContentModal'
 
-type Props = {
-  item: any
-  signedUrl?: string
-  blobMap: Record<string, Blob>
-  canView: boolean
-  creator: any
-  onUnlocked?: () => void // callback pour refresh
+interface Props {
+  contentId: string
+  viewer: any
+  onUnlocked?: () => void
 }
 
-export default function ContentPreviewCard({
-  item,
-  signedUrl,
-  blobMap,
-  canView,
-  creator,
-  onUnlocked,
-}: Props) {
+export default function ContentPreviewCard({ contentId, viewer, onUnlocked }: Props) {
+  const [content, setContent] = useState<any>(null)
+  const [signedUrl, setSignedUrl] = useState<string>('')
+  const [blob, setBlob] = useState<Blob | null>(null)
+  const [canView, setCanView] = useState<boolean>(false)
   const [isOpen, setIsOpen] = useState(false)
 
-  const handleClick = () => {
-    setIsOpen(true)
-  }
+  const handleClick = () => setIsOpen(true)
+  const handleClose = () => setIsOpen(false)
 
-  const handleClose = () => {
-    setIsOpen(false)
-  }
+  useEffect(() => {
+    const fetchData = async () => {
+      const { data: contentData } = await supabase
+        .from('contents')
+        .select('*')
+        .eq('id', contentId)
+        .single()
+
+      if (!contentData) return
+      setContent(contentData)
+
+      const requiresSub = contentData.sub_required === true
+      const requiresPurchase = !contentData.is_free && !contentData.sub_required
+
+      const isSubscribed = viewer.subscribedTo?.includes(contentData.user_id)
+      const isPurchased = viewer.purchasedContentIds?.includes(contentId)
+      const isOwner = contentData.user_id === viewer.id
+      const isFree = contentData.is_free === true
+
+      const canAccess =
+        isFree ||
+        isOwner ||
+        (requiresSub && isSubscribed) ||
+        (requiresPurchase && isPurchased)
+
+      setCanView(canAccess)
+
+      // 🔓 Génére TOUJOURS un signedUrl pour afficher un aperçu, flouté ou non
+      if (contentData.media_path) {
+        const { data: signed } = await supabase.storage
+          .from('contents')
+          .createSignedUrl(contentData.media_path, 3600)
+
+        const finalUrl = signed?.signedUrl ?? ''
+        setSignedUrl(finalUrl)
+
+        // 🔐 On charge le blob SEULEMENT si l'utilisateur peut le voir
+        if (canAccess && finalUrl) {
+          const res = await fetch(finalUrl)
+          const blobData = await res.blob()
+          setBlob(blobData)
+        }
+      }
+    }
+
+    fetchData()
+  }, [contentId, viewer])
+
+  if (!content) return null
 
   return (
     <>
@@ -54,15 +94,15 @@ export default function ContentPreviewCard({
 
         <div className="p-4">
           <p className="text-sm text-white mb-1">
-            {item.description || <i>Aucune description</i>}
+            {content.description || <i>Aucune description</i>}
           </p>
 
           <p className="text-xs text-zinc-400">
-            {item.sub_required
+            {content.sub_required
               ? 'Abonnement requis'
-              : item.is_free
+              : content.is_free
               ? 'Gratuit'
-              : `${item.price} €`}
+              : `${content.price} €`}
           </p>
 
           {!canView && (
@@ -73,21 +113,20 @@ export default function ContentPreviewCard({
         </div>
       </div>
 
-      {/* Modal auto */}
-      {isOpen && canView && blobMap[item.id] && (
+      {isOpen && canView && blob && (
         <Modal onClose={handleClose}>
-          <SecureContentCard item={item} blob={blobMap[item.id]} />
+          <SecureContentCard item={content} blob={blob} />
         </Modal>
       )}
 
       {isOpen && !canView && (
         <LockedContentModal
-          item={item}
-          creator={creator}
+          item={content}
+          creator={{ username: 'creator' }}
           onClose={handleClose}
           onUnlocked={onUnlocked || (() => {})}
         />
       )}
     </>
   )
-}
+} 

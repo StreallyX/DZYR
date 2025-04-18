@@ -14,12 +14,9 @@ export default function CreatorProfilePage() {
 
   const [profile, setProfile] = useState<any>(null)
   const [contents, setContents] = useState<any[]>([])
-  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
-  const [blobs, setBlobs] = useState<Record<string, Blob>>({})
-  const [purchasedIds, setPurchasedIds] = useState<string[]>([])
+  const [viewer, setViewer] = useState<any>(null)
   const [isSubscribed, setIsSubscribed] = useState<boolean>(false)
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null)
-  const [userId, setUserId] = useState<string>('')
 
   useEffect(() => {
     const fetchData = async () => {
@@ -34,10 +31,7 @@ export default function CreatorProfilePage() {
 
       const session = await supabase.auth.getSession()
       const user = session.data.session?.user
-      const token = session.data.session?.access_token
-
-      if (!user || !token) return
-      setUserId(user.id)
+      if (!user) return
 
       const { data: subs } = await supabase
         .from('subscriptions')
@@ -60,8 +54,6 @@ export default function CreatorProfilePage() {
         .select('content_id')
         .eq('user_id', user.id)
 
-      setPurchasedIds(purchases?.map(p => p.content_id) || [])
-
       const { data: contentData } = await supabase
         .from('contents')
         .select('*')
@@ -70,38 +62,11 @@ export default function CreatorProfilePage() {
 
       setContents(contentData || [])
 
-      const signed: Record<string, string> = {}
-      const blobMap: Record<string, Blob> = {}
-
-      for (const item of contentData || []) {
-        const canView =
-          item.is_free ||
-          (item.sub_required && validSub) ||
-          (purchases?.some(p => p.content_id === item.id))
-
-        if (!item.media_path) continue
-
-        const { data: signedUrlData } = await supabase.storage
-          .from('contents')
-          .createSignedUrl(item.media_path, 60)
-
-        if (signedUrlData?.signedUrl) {
-          signed[item.id] = signedUrlData.signedUrl
-        }
-
-        if (canView) {
-          const res = await fetch(`/api/protected-image?path=${item.media_path}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          })
-
-          if (res.ok) {
-            blobMap[item.id] = await res.blob()
-          }
-        }
-      }
-
-      setSignedUrls(signed)
-      setBlobs(blobMap)
+      setViewer({
+        id: user.id,
+        subscribedTo: validSub ? [profileData.id] : [],
+        purchasedContentIds: purchases?.map(p => p.content_id) || []
+      })
     }
 
     if (username) fetchData()
@@ -113,14 +78,13 @@ export default function CreatorProfilePage() {
   }
 
   const handleWriteClick = async () => {
-    if (!userId || !profile) return
-    
+    if (!viewer?.id || !profile) return
 
     const { data: convs } = await supabase
       .from('conversations')
       .select('*')
       .or(
-        `and(user1_id.eq.${userId},user2_id.eq.${profile.id}),and(user1_id.eq.${profile.id},user2_id.eq.${userId})`
+        `and(user1_id.eq.${viewer.id},user2_id.eq.${profile.id}),and(user1_id.eq.${profile.id},user2_id.eq.${viewer.id})`
       )
 
     if (convs && convs.length > 0) {
@@ -130,7 +94,7 @@ export default function CreatorProfilePage() {
         .from('conversations')
         .insert([
           {
-            user1_id: userId,
+            user1_id: viewer.id,
             user2_id: profile.id,
             last_message: '',
             last_message_at: new Date().toISOString(),
@@ -145,12 +109,10 @@ export default function CreatorProfilePage() {
     }
   }
 
-  if (!profile) return <div>Chargement du créateur...</div>
+  if (!profile || viewer === null) return <div>Chargement du créateur...</div>
 
   return (
     <div className="p-4">
-
-
       <ProfileHeader
         profile={profile}
         isOwnProfile={false}
@@ -164,15 +126,9 @@ export default function CreatorProfilePage() {
         onSubscribe={handleSubscribeClick}
       />
 
-
       <ContentFeed
         contents={contents}
-        signedUrls={signedUrls}
-        blobMap={blobs}
-        isOwnProfile={false}
-        purchasedIds={purchasedIds}
-        isSubscribed={isSubscribed}
-        creator={profile}
+        viewer={viewer}
       />
     </div>
   )
