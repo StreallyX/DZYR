@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { Modal } from '@/components/ui/Modal'
 import SecureContentCard from '@/components/SecureContentCard'
 import LockedContentModal from '@/components/LockedContentModal'
+import SecureImageViewer from '@/components/SecureImageViewer'
+
 
 interface Props {
   contentId: string
@@ -50,17 +52,16 @@ export default function ContentPreviewCard({ contentId, viewer, onUnlocked }: Pr
 
       setCanView(canAccess)
 
-      // 🔓 Génére TOUJOURS un signedUrl pour afficher un aperçu, flouté ou non
       if (contentData.media_path) {
         const { data: signed } = await supabase.storage
           .from('contents')
           .createSignedUrl(contentData.media_path, 3600)
 
-        const finalUrl = signed?.signedUrl ?? ''
-        setSignedUrl(finalUrl)
+        const url = signed?.signedUrl
+        setSignedUrl(url ?? '')
 
-        if (canAccess && finalUrl) {
-          const res = await fetch(finalUrl)
+        if (canAccess && url && !url.endsWith('.mp4')) {
+          const res = await fetch(url)
           const blobData = await res.blob()
           setBlob(blobData)
         }
@@ -88,6 +89,8 @@ export default function ContentPreviewCard({ contentId, viewer, onUnlocked }: Pr
 
   if (!content) return null
 
+  const isVideo = content.media_path?.endsWith('.mp4')
+
   return (
     <>
       <div
@@ -95,35 +98,41 @@ export default function ContentPreviewCard({ contentId, viewer, onUnlocked }: Pr
         className="bg-zinc-800 rounded-xl overflow-hidden shadow-md cursor-pointer hover:bg-zinc-700 transition-all"
       >
         {signedUrl ? (
-          <img
-            src={signedUrl}
-            alt="content"
-            className={`w-full h-64 object-cover transition-all duration-200 ${
-              canView ? '' : 'blur-[6px] scale-105'
-            }`}
-          />
+          isVideo ? (
+            <div className="w-full h-64 bg-zinc-700 text-white flex items-center justify-center text-sm italic">
+              🎥 No preview for this video yet
+            </div>
+          ) : (
+            <SecureImageViewer
+              path={content.media_path}
+              className={`h-64 w-full transition-all duration-200 ${
+                canView ? '' : 'blur-[20px] scale-105'
+              }`}
+            />
+
+          )
         ) : (
           <div className="w-full h-64 bg-zinc-700 flex items-center justify-center text-white">
-            Aucun aperçu
+            No preview available
           </div>
         )}
 
         <div className="p-4">
           <p className="text-sm text-white mb-1">
-            {content.description || <i>Aucune description</i>}
+            {content.description || <i>No description</i>}
           </p>
 
           <p className="text-xs text-zinc-400">
             {content.sub_required
-              ? 'Abonnement requis'
+              ? 'Subscription required'
               : content.is_free
-              ? 'Gratuit'
+              ? 'Free'
               : `${content.price} €`}
           </p>
 
           {!canView && (
             <p className="mt-2 text-xs text-red-400 font-semibold">
-              🔒 Contenu verrouillé
+              🔒 Locked content
             </p>
           )}
         </div>
