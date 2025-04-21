@@ -6,211 +6,211 @@ import { supabase } from '@/lib/supabase'
 import ContentPreviewCard from '@/components/ContentPreviewCard'
 import ContentSelectorModal from '@/components/ContentSelectorModal'
 
+/* ----- constants ----- */
+const PAGE_SIZE = 10
+
+/* ----- helpers ----- */
+const log = (...a: any[]) => console.log('[Conv]', ...a)
+
 export default function ConversationPage() {
-  const { conversationId } = useParams() as { conversationId: string }
-  const [messages, setMessages] = useState<any[]>([])
-  const [newMessage, setNewMessage] = useState('')
-  const [userId, setUserId] = useState('')
-  const [viewer, setViewer] = useState<any>(null)
-  const [hasAccess, setHasAccess] = useState<boolean | null>(null)
-  const [showModal, setShowModal] = useState(false)
-  const [selectedContent, setSelectedContent] = useState<any>(null)
+  const { conversationId }  = useParams() as { conversationId: string }
+  const router               = useRouter()
+
+  /* --- state --- */
+  const [messages, setMsgs]  = useState<any[]>([])
+  const [cursor,   setCur]   = useState<string | null>(null)    // created_at du + ancien
+  const [loading,  setLoad]  = useState(false)
+  const [hasMore,  setMore]  = useState(true)
+
+  const [userId,   setUid]   = useState('')
+  const [viewer,   setView]  = useState<any>({                 // FIX : objet par défaut
+    purchasedContentIds: [],
+    subscribedTo:        []
+  })
+
+  const [newMsg,   setNew]   = useState('')
+  const [sel,      setSel]   = useState<any>(null)
+  const [showModal,setModal] = useState(false)
+
+  /* --- refs --- */
+  const listRef   = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const router = useRouter()
+  const keepPos   = useRef<{h:number; t:number}>({h:0,t:0})
+  const firstLoad = useRef(true)                                // FIX : pour 1ᵉʳ scroll
 
-  const scrollToBottom = () => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
-
+  /* --- viewer --- */
   const refreshViewer = async (uid: string) => {
     const { data: purchases } = await supabase
-      .from('purchases')
-      .select('content_id')
-      .eq('user_id', uid)
+      .from('purchases').select('content_id').eq('user_id', uid)
 
-    const { data: subscriptions } = await supabase
-      .from('subscriptions')
-      .select('creator_id, end_date')
-      .eq('subscriber_id', uid)
+    const { data: subs } = await supabase
+      .from('subscriptions').select('creator_id,end_date').eq('subscriber_id', uid)
 
-    const now = new Date()
-    const validSubscriptions = subscriptions?.filter(sub => new Date(sub.end_date) > now) || []
+    const now   = new Date()
+    const valid = subs?.filter(s => new Date(s.end_date) > now) || []
 
-    setViewer({
+    setView({
       id: uid,
       purchasedContentIds: purchases?.map(p => String(p.content_id)) || [],
-      subscribedTo: validSubscriptions.map(sub => sub.creator_id),
+      subscribedTo:        valid.map(s => s.creator_id)
     })
   }
 
-  useEffect(() => {
-    const fetchMessages = async () => {
-      const session = await supabase.auth.getSession()
-      const user = session.data.session?.user
-      if (!user) return
+  /* --- scroll helpers --- */
+  const scrollToBottom = (smooth=false) =>
+    bottomRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' })
 
-      setUserId(user.id)
-      await refreshViewer(user.id)
+  const preserveScroll = () => {
+    const el = listRef.current
+    if (!el) return
+    const { h, t } = keepPos.current
+    el.scrollTop = el.scrollHeight - h + t
+  }
 
-      const { data: conv } = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('id', conversationId)
-        .single()
+  /* --- fetch one batch --- */
+  const fetchBatch = async (before?: string) => {
+    if (loading || (!hasMore && before)) return
+    log('fetch', before ?? 'latest')
+    setLoad(true)
 
-      if (!conv || (conv.user1_id !== user.id && conv.user2_id !== user.id)) {
-        setHasAccess(false)
-        return
-      }
-      setHasAccess(true)
+    const q = supabase.from('messages')
+      .select('*')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: false })
+      .limit(PAGE_SIZE)
 
-      const { data: msgs } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true })
+    if (before) q.lt('created_at', before)
+    const { data } = await q
 
-      setMessages(msgs || [])
-    }
-
-    if (conversationId) fetchMessages()
-  }, [conversationId])
-
-  useEffect(() => {
-    if (!conversationId || !userId) return
-    const channel = supabase
-      .channel(`conversation:${conversationId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        (payload) => {
-          setMessages((prev) => [...prev, payload.new])
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [conversationId, userId])
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages])
-
-  const sendMessage = async () => {
-    if (!newMessage.trim() && !selectedContent) return
-
-    const payload: any = {
-      conversation_id: conversationId,
-      sender_id: userId,
-    }
-
-    if (newMessage.trim()) payload.content = newMessage.trim()
-    if (selectedContent?.id) payload.content_id = selectedContent.id
-
-    const { error: insertError } = await supabase.from('messages').insert([payload])
-
-    if (insertError) {
-      console.error("❌ Erreur lors de l'envoi :", insertError)
+    if (!data || data.length === 0) {
+      setMore(false)
+      setLoad(false)
       return
     }
 
-    await supabase
-      .from('conversations')
-      .update({
-        last_message: newMessage.trim() || '[Contenu]',
-        last_message_at: new Date().toISOString(),
-      })
-      .eq('id', conversationId)
+    const batch = data.reverse()                // ASC : plus vieux d’abord
+    setCur(batch[0].created_at)                // FIX : nouveau curseur
 
-    setNewMessage('')
-    setSelectedContent(null)
+    /* merge sans doublons */
+    setMsgs(prev => {
+      const unique: Record<string, any> = {}
+      ;[...batch, ...prev].forEach(m => { unique[m.id] = m })
+      return Object.values(unique).sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
+    })
+
+    setLoad(false)
   }
 
-  if (hasAccess === false) return <div className="p-4 text-red-600 font-bold">❌ Accès refusé</div>
-  if (hasAccess === null) return <div className="p-4">⏳ Chargement...</div>
+  /* --- init (user, viewer, premier lot) --- */
+  useEffect(() => {
+    const run = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
+      if (!user) return
+      setUid(user.id)
+      await refreshViewer(user.id)
+      await fetchBatch()                       // latest
+    }
+    if (conversationId) run()
+  }, [conversationId])
 
+  
+
+  /* --- scroll automatique après le rendu du 1ᵉ lot & après images --- */
+  useEffect(() => {
+    if (firstLoad.current && messages.length > 0) {
+      firstLoad.current = false
+      // Laisser le temps aux images / cartes de prendre leur place
+      setTimeout(() => scrollToBottom(false), 60)              // FIX
+    }
+  }, [messages])
+
+  /* --- infinite scroll (haut) --- */
+  useEffect(() => {
+    const el = listRef.current
+    if (!el) return
+    const onScroll = () => {
+      if (el.scrollTop < 60 && !loading && hasMore) {
+        keepPos.current = { h: el.scrollHeight, t: el.scrollTop }
+        fetchBatch(cursor ?? undefined).then(() => requestAnimationFrame(preserveScroll))
+      }
+    }
+    el.addEventListener('scroll', onScroll)
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [cursor, loading, hasMore])
+
+  /* --- realtime insert (bas) --- */
+  useEffect(() => {
+    if (!conversationId) return
+    const ch = supabase
+      .channel(`conv:${conversationId}`)
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages',
+          filter: `conversation_id=eq.${conversationId}` },
+        payload => setMsgs(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new]))
+    ch.subscribe()
+    return () => { void supabase.removeChannel(ch) }
+  }, [conversationId])
+
+  /* --- send --- */
+  const send = async () => {
+    if (!newMsg.trim() && !sel) return
+    await supabase.from('messages').insert([{
+      conversation_id: conversationId,
+      sender_id:       userId,
+      content:         newMsg.trim() || null,
+      content_id:      sel?.id ?? null
+    }])
+    setNew(''); setSel(null)
+    setTimeout(() => scrollToBottom(true), 40)
+  }
+
+  /* --- render --- */
   return (
     <div className="fixed inset-0 flex flex-col max-w-md mx-auto bg-black">
-      {/* Header */}
-      <div className="p-4 flex items-center border-b border-zinc-700">
-        <button onClick={() => router.back()} className="mr-2 text-gray-400 hover:text-white">
-          ← Retour
-        </button>
-        <h2 className="text-xl font-bold">💬 Conversation</h2>
+      {/* header */}
+      <div className="p-4 border-b border-zinc-700 flex items-center">
+        <button onClick={() => router.back()} className="mr-2">←</button>
+        <span className="font-bold">💬 Conversation</span>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3" ref={containerRef}>
-        {messages.map((msg, i) => {
-          const isMe = msg.sender_id === userId
+      {/* list */}
+      <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+        {messages.map(m => {
+          const isMe = m.sender_id === userId
           return (
-            <div key={i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-              <div className={`rounded-xl px-4 py-2 max-w-xs ${isMe ? 'bg-blue-500 text-white' : 'bg-zinc-300 text-black'}`}>
-                {msg.content_id ? (
-                  <>
-                    <ContentPreviewCard
-                      contentId={msg.content_id}
-                      viewer={viewer}
-                      onUnlocked={() => refreshViewer(userId)}
-                    />
-                    {msg.content && <p className="mt-2 text-sm">{msg.content}</p>}
-                  </>
-                ) : (
-                  msg.content
-                )}
+            <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-xs px-4 py-2 rounded-xl ${isMe ? 'bg-blue-500 text-white' : 'bg-zinc-300 text-black'}`}>
+                {m.content_id
+                  ? <ContentPreviewCard contentId={m.content_id} viewer={viewer}/>
+                  : m.content}
               </div>
             </div>
           )
         })}
-        <div ref={bottomRef} />
+        {loading && <p className="text-center text-xs text-gray-400">⏳ Chargement…</p>}
+        <div ref={bottomRef}/>
       </div>
 
-      {/* Input */}
-      <div className="w-full bg-zinc-950 p-3 border-t border-zinc-800">
-        {selectedContent && (
-          <div className="mb-2">
-            <p className="text-sm text-zinc-300">Contenu sélectionné : {selectedContent.description}</p>
-          </div>
-        )}
-        <div className="flex gap-2 items-center">
-          <button
-            onClick={() => setShowModal(true)}
-            className="text-white text-xl hover:text-violet-400"
-          >
-            📎
-          </button>
+      {/* input */}
+      <div className="border-t border-zinc-800 bg-zinc-950 p-3">
+        <div className="flex gap-2">
           <input
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-            placeholder="Votre message..."
-            className="flex-1 p-2 rounded border border-zinc-700 bg-zinc-900 text-white"
-          />
-          <button
-            onClick={sendMessage}
-            className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded font-bold"
-          >
-            Envoyer
-          </button>
+            value={newMsg}
+            onChange={e => setNew(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && send()}
+            placeholder="Votre message…"
+            className="flex-1 bg-zinc-900 text-white p-2 rounded" />
+          <button onClick={send} className="bg-violet-600 px-4 rounded">Envoyer</button>
         </div>
       </div>
 
-      {/* Content selector */}
       {showModal && (
         <ContentSelectorModal
-          onSelect={(item) => {
-            setSelectedContent(item)
-            setShowModal(false)
-          }}
-          onClose={() => setShowModal(false)}
+          onSelect={i => { setSel(i); setModal(false) }}
+          onClose ={() => setModal(false)}
         />
       )}
     </div>
