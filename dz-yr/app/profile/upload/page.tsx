@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 
 export default function UploadContentPage() {
   const [file, setFile] = useState<File | null>(null)
+  const [title, setTitle] = useState('') // <-- Nouveau state pour le titre
   const [description, setDescription] = useState('')
   const [price, setPrice] = useState(0)
   const [accessType, setAccessType] = useState<'free' | 'subscription' | 'paid'>('free')
@@ -16,13 +17,12 @@ export default function UploadContentPage() {
       data: { user },
     } = await supabase.auth.getUser()
 
-    if (!user || !file) return
+    if (!user || !file || !title.trim()) return // <-- On exige un titre non vide
 
     const fileExt = file.name.split('.').pop()
     const fileName = `${user.id}-${Date.now()}.${fileExt}`
     const filePath = fileName
 
-    // Détection image ou vidéo
     const mimeType = file.type
     const mediaType = mimeType.startsWith('image')
       ? 'image'
@@ -44,6 +44,7 @@ export default function UploadContentPage() {
 
     const contentData = {
       user_id: user.id,
+      title, // <-- Ajout du titre ici
       description,
       media_path: filePath,
       media_type: mediaType,
@@ -80,6 +81,14 @@ export default function UploadContentPage() {
         accept="image/*,video/*"
         onChange={(e) => setFile(e.target.files?.[0] ?? null)}
         className="mb-4 text-white"
+      />
+
+      <input
+        type="text"
+        placeholder="Titre"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        className="block w-full mb-4 bg-zinc-800 p-2 rounded text-white"
       />
 
       <textarea
