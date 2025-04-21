@@ -7,7 +7,6 @@ import { supabase } from '@/lib/supabase'
 import ProfileHeader from '@/components/ProfileHeader'
 import ContentFeed from '@/components/ContentFeed'
 import CreatorProfileActions from '@/components/CreatorProfileActions'
-import ContentPreviewCard from '@/components/ContentPreviewCard'
 
 export default function CreatorProfilePage() {
   const { username } = useParams() as { username: string }
@@ -62,6 +61,12 @@ export default function CreatorProfilePage() {
       const user = session.data.session?.user
       if (!user) return
 
+      // 👉 Si c’est notre propre profil, on redirige vers /profile
+      if (profileData.id === user.id) {
+        router.replace('/profile')
+        return
+      }
+
       await refreshViewer(user.id, profileData.id)
 
       const { data: contentData } = await supabase
@@ -74,7 +79,7 @@ export default function CreatorProfilePage() {
     }
 
     if (username) fetchData()
-  }, [username])
+  }, [username, router])
 
   const handleSubscribeClick = () => {
     if (!profile?.id) return
@@ -96,14 +101,12 @@ export default function CreatorProfilePage() {
     } else {
       const { data: newConv } = await supabase
         .from('conversations')
-        .insert([
-          {
-            user1_id: viewer.id,
-            user2_id: profile.id,
-            last_message: '',
-            last_message_at: new Date().toISOString(),
-          },
-        ])
+        .insert([{
+          user1_id: viewer.id,
+          user2_id: profile.id,
+          last_message: '',
+          last_message_at: new Date().toISOString(),
+        }])
         .select()
         .single()
 
@@ -117,10 +120,7 @@ export default function CreatorProfilePage() {
 
   return (
     <div className="p-4">
-      <ProfileHeader
-        profile={profile}
-        isOwnProfile={false}
-      />
+      <ProfileHeader profile={profile} isOwnProfile={false} />
 
       <CreatorProfileActions
         profile={profile}
