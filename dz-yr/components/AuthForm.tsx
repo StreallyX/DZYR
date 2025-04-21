@@ -74,8 +74,8 @@ export default function AuthForm() {
   }
 
   return (
-    <div className="max-w-md mx-auto p-4">
-      <h2 className="text-xl font-bold mb-4 text-white">{isLogin ? 'Connexion' : 'Inscription'}</h2>
+    <div className="max-w-md mx-auto p-4 pt-24">
+     <h2 className="text-xl font-bold mb-4 text-white">{isLogin ? 'Connexion' : 'Inscription'}</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         {!isLogin && (
           <input

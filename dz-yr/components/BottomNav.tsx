@@ -12,7 +12,7 @@ export default function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-black border-t border-zinc-800 px-8 py-3 flex justify-around items-center z-50 shadow-lg">
-      <Link href="/" className={isActive('/')}>
+      <Link href="/home" className={isActive('/')}>
         <Home size={26} />
       </Link>
       <Link href="/search" className={isActive('/search')}>

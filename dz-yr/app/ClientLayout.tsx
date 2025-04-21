@@ -6,15 +6,23 @@ import BottomNav from '@/components/BottomNav'
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const hideLayout = /^\/messages\/[^/]+$/.test(pathname)
+
+  const isMessagePage = /^\/messages\/[^/]+$/.test(pathname)
+  const isLanding = pathname === '/'
+  const isAuth = pathname === '/auth/login'
+
+  const hideHeader = isMessagePage
+  const hideBottomNav = isMessagePage || isLanding || isAuth
 
   return (
     <>
-      {!hideLayout && <Header />}
-      <main className={`mx-auto ${hideLayout ? '' : 'max-w-md px-4 pt-16 pb-24'}`}>
+      {!hideHeader && <Header />}
+
+      <main className={`mx-auto ${hideBottomNav ? '' : 'max-w-md px-4 pt-16 pb-24'}`}>
         {children}
       </main>
-      {!hideLayout && <BottomNav />}
+
+      {!hideBottomNav && <BottomNav />}
     </>
   )
 }
