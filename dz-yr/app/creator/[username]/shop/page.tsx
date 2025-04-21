@@ -4,6 +4,8 @@ import { useParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import ContentFeed from '@/components/ContentFeed'
+import BackButton from '@/components/ui/BackButton'
+
 
 export default function ShopPage() {
   const { username } = useParams()
@@ -63,6 +65,7 @@ export default function ShopPage() {
 
   return (
     <div className="max-w-xl mx-auto px-4 py-6">
+      <BackButton />
       <h1 className="text-2xl font-bold mb-4">🛒 Shop de @{username}</h1>
 
       <ContentFeed

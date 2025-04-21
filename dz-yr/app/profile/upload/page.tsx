@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import BackButton from '@/components/ui/BackButton'
+
 
 export default function UploadContentPage() {
   const [file, setFile] = useState<File | null>(null)
@@ -67,6 +69,7 @@ export default function UploadContentPage() {
 
   return (
     <div className="p-4 max-w-xl mx-auto">
+      <BackButton />
       <button
         onClick={() => router.back()}
         className="text-sm mb-4 text-white hover:underline"

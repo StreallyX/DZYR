@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import BackButton from '@/components/ui/BackButton'
+
 
 export default function EditContentPage() {
   const { id } = useParams()
@@ -52,6 +54,7 @@ export default function EditContentPage() {
 
   return (
     <div className="max-w-md mx-auto p-6">
+        <BackButton />
       <h1 className="text-2xl font-bold mb-4">Modifier le contenu</h1>
 
       <label className="block mb-2 text-sm font-medium text-white">Titre</label>
