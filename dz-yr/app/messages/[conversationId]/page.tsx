@@ -7,7 +7,7 @@ import ContentPreviewCard from '@/components/ContentPreviewCard'
 import ContentSelectorModal from '@/components/ContentSelectorModal'
 
 /* ----- constants ----- */
-const PAGE_SIZE = 10
+const PAGE_SIZE = 15
 
 /* ----- helpers ----- */
 const log = (...a: any[]) => console.log('[Conv]', ...a)
@@ -170,39 +170,44 @@ export default function ConversationPage() {
   /* --- render --- */
   return (
     <div className="fixed inset-0 flex flex-col max-w-md mx-auto bg-black">
-      {/* header */}
-      <div className="p-4 border-b border-zinc-700 flex items-center">
+      {/* Header fixe en haut */}
+      <div className="p-4 border-b border-zinc-700 flex items-center h-14 shrink-0">
         <button onClick={() => router.back()} className="mr-2">←</button>
         <span className="font-bold">💬 Conversation</span>
       </div>
 
-      {/* list */}
-      <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+      {/* Liste de messages avec scroll auto */}
+      <div
+        ref={listRef}
+        className="flex-1 overflow-y-auto px-4 py-3 space-y-4"
+        style={{ height: 'calc(100vh - 3.5rem - 4.2rem)' }} // 3.5rem (header) + 4.2rem (footer)
+      >
         {messages.map(m => {
           const isMe = m.sender_id === userId
           return (
             <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-xs px-4 py-2 rounded-xl ${isMe ? 'bg-blue-500 text-white' : 'bg-zinc-300 text-black'}`}>
                 {m.content_id
-                  ? <ContentPreviewCard contentId={m.content_id} viewer={viewer}/>
+                  ? <ContentPreviewCard contentId={m.content_id} viewer={viewer} />
                   : m.content}
               </div>
             </div>
           )
         })}
         {loading && <p className="text-center text-xs text-gray-400">⏳ Chargement…</p>}
-        <div ref={bottomRef}/>
+        <div ref={bottomRef} />
       </div>
 
-      {/* input */}
-      <div className="border-t border-zinc-800 bg-zinc-950 p-3">
+      {/* Footer fixe en bas */}
+      <div className="border-t border-zinc-800 bg-zinc-950 p-3 h-16 shrink-0">
         <div className="flex gap-2">
           <input
             value={newMsg}
             onChange={e => setNew(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && send()}
             placeholder="Votre message…"
-            className="flex-1 bg-zinc-900 text-white p-2 rounded" />
+            className="flex-1 bg-zinc-900 text-white p-2 rounded"
+          />
           <button onClick={send} className="bg-violet-600 px-4 rounded">Envoyer</button>
         </div>
       </div>
@@ -210,7 +215,7 @@ export default function ConversationPage() {
       {showModal && (
         <ContentSelectorModal
           onSelect={i => { setSel(i); setModal(false) }}
-          onClose ={() => setModal(false)}
+          onClose={() => setModal(false)}
         />
       )}
     </div>
