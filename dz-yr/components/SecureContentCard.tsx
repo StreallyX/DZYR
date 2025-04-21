@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
 import SecureVideoPlayer from '@/components/SecureVideoPlayer'
 import SecureImageViewer from '@/components/SecureImageViewer'
 
@@ -12,6 +13,7 @@ type Props = {
     description?: string
     media_type?: string
     media_path: string
+    user_id: string
   }
   blob: Blob
 }
@@ -28,12 +30,13 @@ type Comment = {
 export default function SecureContentCard({ item }: Props) {
   const [userId, setUserId] = useState<string | null>(null)
   const [user, setUser] = useState<{ id: string; username: string } | null>(null)
-
   const [likes, setLikes] = useState<number>(0)
   const [liked, setLiked] = useState(false)
-
   const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState('')
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  const router = useRouter()
 
   useEffect(() => {
     const load = async () => {
@@ -127,8 +130,34 @@ export default function SecureContentCard({ item }: Props) {
 
   return (
     <div className="relative">
-      <h2 className="text-lg font-bold mb-2">{item.title}</h2>
+      {/* Titre avec les 3 points à droite si c’est ton contenu */}
+      <div className="flex justify-between items-center mb-2">
+        <h2 className="text-lg font-bold text-white">{item.title}</h2>
 
+        {userId === item.user_id && (
+          <div className="relative">
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="text-black text-xl px-2 py-1 bg-white rounded-full shadow-md hover:bg-gray-100 transition"
+            >
+              ⋮
+            </button>
+
+            {menuOpen && (
+              <div className="absolute right-0 mt-2 w-40 bg-zinc-900 border border-zinc-700 rounded shadow-lg z-50">
+                <button
+                  onClick={() => router.push(`/edit/${item.id}`)}
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-zinc-800 text-white"
+                >
+                  ✏️ Modifier
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Affichage média */}
       <div className="relative border border-zinc-700 rounded overflow-hidden mb-4">
         {item.media_type === 'video' ? (
           <SecureVideoPlayer contentId={item.id} />
@@ -137,15 +166,18 @@ export default function SecureContentCard({ item }: Props) {
         )}
       </div>
 
+      {/* Description */}
       {item.description && (
         <p className="text-sm italic text-zinc-400 mb-2">{item.description}</p>
       )}
 
+      {/* Likes et commentaires */}
       <div className="flex justify-between items-center mb-4 text-sm text-zinc-400">
         <span>{likes} ❤️ like(s)</span>
         <span>{comments.length} 💬 commentaire(s)</span>
       </div>
 
+      {/* Bouton Like */}
       <button
         onClick={toggleLike}
         className={`mb-4 px-4 py-1 text-sm font-bold rounded ${
@@ -155,6 +187,7 @@ export default function SecureContentCard({ item }: Props) {
         {liked ? '❤️ Liked' : '🤍 Like'}
       </button>
 
+      {/* Ajout de commentaire */}
       <textarea
         value={newComment}
         onChange={(e) => setNewComment(e.target.value)}
@@ -168,6 +201,7 @@ export default function SecureContentCard({ item }: Props) {
         Commenter
       </button>
 
+      {/* Liste des commentaires */}
       <div className="space-y-4 max-h-52 overflow-y-auto">
         {comments.map((c) => (
           <div key={c.id} className="bg-zinc-800 p-3 rounded text-sm text-zinc-300">
