@@ -1,36 +1,88 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🟣 DZYR – Premium Content Platform
 
-## Getting Started
+DZYR est une plateforme moderne de contenus exclusifs, conçue pour les créateurs souhaitant vendre ou partager des images, vidéos et messages privés via abonnement ou achats unitaires.
 
-First, run the development server:
+Développée avec **Next.js**, **TailwindCSS**, **Supabase**, et un système **d'authentification personnalisé via JWT**, elle met l’accent sur la **sécurité**, la **monétisation**, et l’expérience utilisateur.
+
+---
+
+## 🚀 Getting Started
+
+Installe les dépendances :
 
 ```bash
+npm install
+Lance le serveur de développement :
+
+bash
+Copier
+Modifier
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Puis ouvre http://localhost:3000 pour tester la plateforme en local.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+🔐 Fonctionnalités clés
+✅ Authentification par e-mail avec token JWT (Resend + système custom)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+📷 Gestion de contenus (images, vidéos) avec preview, achat, abonnement
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+🔒 Sécurisation des médias :
 
-## Learn More
+Proxy API
 
-To learn more about Next.js, take a look at the following resources:
+Watermark visible (@username)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Stéganographie LSB invisible
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+QR code dissimulé (optionnel)
 
-## Deploy on Vercel
+💬 Messagerie en temps réel (chat privé entre abonné et créateur)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+🛍 Marketplace de contenus payants
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+📦 Abonnements mensuels avec prix personnalisés
+
+🎛 Page paramètres (bio, avatar, bannière, prix)
+
+🧾 Historique des achats, feed personnalisé
+
+⚙️ Backend custom pour toutes les interactions
+
+🧱 Stack technique
+Framework : Next.js App Router
+
+UI : TailwindCSS + shadcn/ui
+
+Base de données : Supabase PostgreSQL
+
+Auth : JWT custom (stocké côté client, validé via API)
+
+Média : Supabase Storage, Sharp, Canvas, HLS (à venir)
+
+Sécurité : Watermark, Proxy, Protection contre inspection
+
+📁 Architecture
+components/ → composants UI et fonctionnels (auth, médias, content, feed)
+
+app/ → pages, routes, layouts avec protection selon les rôles
+
+lib/ → fonctions utilitaires (supabase.ts, auth.ts, etc.)
+
+api/ → routes sécurisées (/api/auth/, /api/likes/, /api/comments/, etc.)
+
+middleware.ts → redirection automatique selon session JWT
+
+✅ Suivi des tâches
+Toutes les prochaines étapes sont listées dans TODO.md à la racine du projet.
+Ce fichier contient les points d’optimisation (auth, sécurité, composants, messagerie, etc.).
+
+📦 Déploiement
+Déploiement conseillé via Vercel (build automatique avec Next.js).
+Possible aussi en self-host avec Node.js, PostgreSQL et Supabase auto-hébergé.
+
+✍️ Contribution
+Contributions bienvenues via Pull Request.
+⚠️ Merci de bien documenter toute PR touchant à la sécurité (auth, contenus, accès).
+
+👨‍💻 Auteur
+Projet initié et maintenu par @StreallyX
+© 2025 - Tous droits réservés.
