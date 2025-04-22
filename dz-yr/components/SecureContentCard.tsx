@@ -28,7 +28,6 @@ type Comment = {
 }
 
 export default function SecureContentCard({ item }: Props) {
-  const [userId, setUserId] = useState<string | null>(null)
   const [user, setUser] = useState<{ id: string; username: string } | null>(null)
   const [likes, setLikes] = useState<number>(0)
   const [liked, setLiked] = useState(false)
@@ -40,18 +39,17 @@ export default function SecureContentCard({ item }: Props) {
 
   useEffect(() => {
     const load = async () => {
-      const session = await supabase.auth.getSession()
-      const uid = session.data.session?.user.id ?? null
-      setUserId(uid)
-      if (!uid) return
+      const token = localStorage.getItem('auth-token')
+      if (!token) return
 
-      const { data: userProfile } = await supabase
-        .from('users')
-        .select('username')
-        .eq('id', uid)
-        .single()
+      const res = await fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
 
-      setUser({ id: uid, username: userProfile?.username || 'unknown' })
+      if (!res.ok) return
+
+      const { user } = await res.json()
+      setUser(user)
 
       const { count: likeCount } = await supabase
         .from('likes')
@@ -62,9 +60,9 @@ export default function SecureContentCard({ item }: Props) {
 
       const { data: existingLike } = await supabase
         .from('likes')
-        .select('*')
+        .select('id')
         .eq('content_id', item.id)
-        .eq('user_id', uid)
+        .eq('user_id', user.id)
         .maybeSingle()
 
       setLiked(!!existingLike)
@@ -82,17 +80,17 @@ export default function SecureContentCard({ item }: Props) {
   }, [item.id])
 
   const toggleLike = async () => {
-    if (!userId) return
+    if (!user) return
 
     if (liked) {
       await supabase
         .from('likes')
         .delete()
-        .eq('user_id', userId)
+        .eq('user_id', user.id)
         .eq('content_id', item.id)
     } else {
       await supabase.from('likes').insert({
-        user_id: userId,
+        user_id: user.id,
         content_id: item.id,
       })
     }
@@ -130,11 +128,10 @@ export default function SecureContentCard({ item }: Props) {
 
   return (
     <div className="relative">
-      {/* Titre avec les 3 points à droite si c’est ton contenu */}
       <div className="flex justify-between items-center mb-2">
         <h2 className="text-lg font-bold text-white">{item.title}</h2>
 
-        {userId === item.user_id && (
+        {user?.id === item.user_id && (
           <div className="relative">
             <button
               onClick={() => setMenuOpen(!menuOpen)}
@@ -157,7 +154,6 @@ export default function SecureContentCard({ item }: Props) {
         )}
       </div>
 
-      {/* Affichage média */}
       <div className="relative border border-zinc-700 rounded overflow-hidden mb-4">
         {item.media_type === 'video' ? (
           <SecureVideoPlayer contentId={item.id} />
@@ -166,18 +162,15 @@ export default function SecureContentCard({ item }: Props) {
         )}
       </div>
 
-      {/* Description */}
       {item.description && (
         <p className="text-sm italic text-zinc-400 mb-2">{item.description}</p>
       )}
 
-      {/* Likes et commentaires */}
       <div className="flex justify-between items-center mb-4 text-sm text-zinc-400">
         <span>{likes} ❤️ like(s)</span>
         <span>{comments.length} 💬 commentaire(s)</span>
       </div>
 
-      {/* Bouton Like */}
       <button
         onClick={toggleLike}
         className={`mb-4 px-4 py-1 text-sm font-bold rounded ${
@@ -187,7 +180,6 @@ export default function SecureContentCard({ item }: Props) {
         {liked ? '❤️ Liked' : '🤍 Like'}
       </button>
 
-      {/* Ajout de commentaire */}
       <textarea
         value={newComment}
         onChange={(e) => setNewComment(e.target.value)}
@@ -201,7 +193,6 @@ export default function SecureContentCard({ item }: Props) {
         Commenter
       </button>
 
-      {/* Liste des commentaires */}
       <div className="space-y-4 max-h-52 overflow-y-auto">
         {comments.map((c) => (
           <div key={c.id} className="bg-zinc-800 p-3 rounded text-sm text-zinc-300">

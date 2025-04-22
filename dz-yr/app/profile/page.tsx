@@ -1,31 +1,22 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-
-import ProtectedRoute from '@/components/ProtectedRoute'
+import { useAuth } from '@/app/contexts/AuthContext'
 import ProfileHeader from '@/components/ProfileHeader'
 import ProfileActions from '@/components/ProfileActions'
 import ContentFeed from '@/components/ContentFeed'
 
 export default function ProfilePage() {
+  const { user } = useAuth()
   const [profile, setProfile] = useState<any>(null)
   const [contents, setContents] = useState<any[]>([])
-  const [viewer, setViewer] = useState<any>(null)
-
-  const router = useRouter()
+  const [subscribedTo, setSubscribedTo] = useState<string[]>([])
+  const [purchasedIds, setPurchasedIds] = useState<string[]>([])
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: { user }, error: authError } = await supabase.auth.getUser()
-      if (authError || !user) {
-        console.error('Utilisateur non connecté')
-        router.push('/auth/login')
-        return
-      }
-
-      setViewer(user)
+      if (!user?.id) return
 
       const { data: profileData, error: profileError } = await supabase
         .from('users')
@@ -33,7 +24,7 @@ export default function ProfilePage() {
         .eq('id', user.id)
         .single()
 
-      if (profileError || !profileData) {
+      if (profileError) {
         console.error('Erreur récupération profil :', profileError)
         return
       }
@@ -52,36 +43,40 @@ export default function ProfilePage() {
       }
 
       setContents(contentData || [])
+
+      const { data: subs } = await supabase
+        .from('subscriptions')
+        .select('creator_id')
+        .eq('user_id', user.id)
+        .gte('end_date', new Date().toISOString())
+
+      setSubscribedTo((subs || []).map((s) => s.creator_id))
+
+      const { data: purchases } = await supabase
+        .from('purchases')
+        .select('content_id')
+        .eq('user_id', user.id)
+
+      setPurchasedIds((purchases || []).map((p) => p.content_id))
     }
 
     fetchData()
-  }, [router])
+  }, [user])
 
-  const isOwnProfile = profile?.id === viewer?.id
+  if (!user || !profile) return null
 
   return (
-    <ProtectedRoute>
-      <div className="pt-4">
-        {profile && viewer && (
-          <>
-            <ProfileHeader
-              profile={profile}
-              isOwnProfile={isOwnProfile}
-            />
-
-            <ProfileActions showShopButton={true} />
-
-            <ContentFeed
-              contents={contents}
-              viewer={{
-                id: viewer.id,
-                subscribedTo: viewer.subscribedTo || [],
-                purchasedContentIds: viewer.purchasedContentIds || [],
-              }}
-            />
-          </>
-        )}
-      </div>
-    </ProtectedRoute>
+    <div className="pt-4">
+      <ProfileHeader profile={profile} isOwnProfile={true} />
+      <ProfileActions showShopButton={true} />
+      <ContentFeed
+        contents={contents}
+        viewer={{
+          id: user.id,
+          subscribedTo,
+          purchasedContentIds: purchasedIds,
+        }}
+      />
+    </div>
   )
 }

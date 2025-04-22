@@ -5,18 +5,37 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 export default function SubscribePage() {
-  const { creatorId } = useParams()
+  const { creatorId } = useParams() as { creatorId: string }
   const router = useRouter()
 
   const [creator, setCreator] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
-    const fetchCreator = async () => {
+    const fetchData = async () => {
+      const token = localStorage.getItem('auth-token')
+      if (!token) {
+        router.push('/auth/login')
+        return
+      }
+
+      const authRes = await fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!authRes.ok) {
+        router.push('/auth/login')
+        return
+      }
+
+      const { user } = await authRes.json()
+      setUser(user)
+
       const { data, error } = await supabase
         .from('users')
         .select('username, subscription_price')
-        .eq('id', creatorId) // 👈 correct now
+        .eq('id', creatorId)
         .single()
 
       if (error) {
@@ -29,43 +48,37 @@ export default function SubscribePage() {
       setLoading(false)
     }
 
-    fetchCreator()
-  }, [creatorId])
+    fetchData()
+  }, [creatorId, router])
 
   const handleConfirm = async () => {
-    const session = await supabase.auth.getSession()
-    const userId = session.data.session?.user.id
-    const userEmail = session.data.session?.user.email
+    if (!user || !creatorId) return
 
-    if (!userId) return alert('Non connecté')
-
-    // Vérifie si l'utilisateur existe dans la table "users"
+    // Insère automatiquement le user dans "users" s'il n'y est pas
     const { data: existingUser } = await supabase
       .from('users')
       .select('id')
-      .eq('id', userId)
+      .eq('id', user.id)
       .single()
 
-    // Si l'utilisateur n'existe pas → l'ajouter automatiquement
     if (!existingUser) {
       const { error: insertError } = await supabase.from('users').insert({
-        id: userId,
-        username: userEmail?.split('@')[0] || 'anonymous',
+        id: user.id,
+        username: user.username || user.email?.split('@')[0] || 'anonymous',
       })
 
       if (insertError) {
-        console.error("Erreur lors de la création automatique de l'utilisateur :", insertError)
-        return alert("Impossible de créer l'utilisateur dans la base.")
+        console.error("Erreur lors de la création de l'utilisateur :", insertError)
+        return alert("Impossible de créer l'utilisateur.")
       }
     }
 
-    // Insère dans subscriptions (paiement simulé)
     const startDate = new Date()
     const endDate = new Date()
     endDate.setMonth(endDate.getMonth() + 1)
 
     const { error } = await supabase.from('subscriptions').insert({
-      subscriber_id: userId,
+      subscriber_id: user.id,
       creator_id: creatorId,
       start_date: startDate.toISOString(),
       end_date: endDate.toISOString(),
@@ -73,11 +86,7 @@ export default function SubscribePage() {
     })
 
     if (error) {
-      console.error('Erreur abonnement :', {
-        message: error?.message,
-        code: error?.code,
-        details: error?.details,
-      })
+      console.error('Erreur abonnement :', error)
       return alert("Erreur lors de l'abonnement.")
     }
 

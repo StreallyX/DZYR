@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { supabase } from '@/lib/supabase'
 
 type Props = {
   path: string
@@ -15,66 +14,69 @@ export default function SecureImageViewer({ path, className }: Props) {
 
   useEffect(() => {
     const loadImage = async () => {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData.session?.access_token
-      const userId = sessionData.session?.user.id
-
-      if (!token || !userId) {
-        setError('Non connecté')
+      const token = localStorage.getItem('auth-token')
+      console.log('[SecureImageViewer] Token récupéré :', token)
+    
+      if (!token) {
+        setError('Non connecté (pas de token)')
         return
       }
-
-      const res = await fetch(`/api/generate-image?path=${encodeURIComponent(path)}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        setError(data.error || 'Erreur image')
-        return
+    
+      try {
+        const userRes = await fetch('/api/auth/me', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+    
+        console.log('[SecureImageViewer] /api/auth/me status:', userRes.status)
+        const userJson = await userRes.json()
+        console.log('[SecureImageViewer] /api/auth/me response:', userJson)
+    
+        if (!userRes.ok) throw new Error(userJson?.error || 'Utilisateur non connecté')
+        const { user } = userJson
+        setUsername(user.username)
+    
+        const imageRes = await fetch(`/api/generate-image?path=${encodeURIComponent(path)}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+    
+        if (!imageRes.ok) {
+          const err = await imageRes.json()
+          throw new Error(err.error || 'Erreur chargement image')
+        }
+    
+        const blob = await imageRes.blob()
+        const imageUrl = URL.createObjectURL(blob)
+    
+        const img = new Image()
+        img.onload = () => {
+          const canvas = canvasRef.current
+          if (!canvas) return
+    
+          const ctx = canvas.getContext('2d')
+          if (!ctx) return
+    
+          canvas.width = img.width
+          canvas.height = img.height
+          ctx.drawImage(img, 0, 0)
+    
+          URL.revokeObjectURL(imageUrl)
+        }
+        img.src = imageUrl
+      } catch (err: any) {
+        console.error('[SecureImageViewer] Erreur loadImage :', err)
+        setError(err.message)
       }
-
-      const blob = await res.blob()
-      const imageUrl = URL.createObjectURL(blob)
-
-      const img = new Image()
-      img.onload = () => {
-        const canvas = canvasRef.current
-        if (!canvas) return
-
-        const ctx = canvas.getContext('2d')
-        if (!ctx) return
-
-        canvas.width = img.width
-        canvas.height = img.height
-
-        ctx.drawImage(img, 0, 0)
-
-        // Watermark visible
-        //ctx.font = '20px Arial'
-        //ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'
-        //ctx.textAlign = 'left'
-        //ctx.fillText(`@${username ?? 'user'} – DZYR`, 10, canvas.height - 10)
-
-        URL.revokeObjectURL(imageUrl)
-      }
-      img.src = imageUrl
-
-      // Get username
-      const { data: profile } = await supabase
-        .from('users')
-        .select('username')
-        .eq('id', userId)
-        .single()
-
-      setUsername(profile?.username ?? null)
     }
-
-    loadImage()
+    
+    // Delay to allow AuthContext/init to settle
+    const timeout = setTimeout(loadImage, 200)
+    return () => clearTimeout(timeout)
   }, [path])
-
+  
   if (error) return <div className="text-red-500 text-sm">⚠️ {error}</div>
 
   return (

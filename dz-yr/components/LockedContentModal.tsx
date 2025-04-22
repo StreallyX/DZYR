@@ -19,9 +19,17 @@ export default function LockedContentModal({ item, creator, onClose, onUnlocked 
 
   useEffect(() => {
     const checkAccess = async () => {
-      const session = await supabase.auth.getSession()
-      const uid = session.data.session?.user.id
-      if (!uid) return onClose()
+      const token = localStorage.getItem('auth-token')
+      if (!token) return onClose()
+
+      const userRes = await fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!userRes.ok) return onClose()
+
+      const { user } = await userRes.json()
+      const uid = user.id
       setUserId(uid)
 
       if (item.is_shop_item) {
@@ -67,13 +75,13 @@ export default function LockedContentModal({ item, creator, onClose, onUnlocked 
       .from('purchases')
       .insert({ user_id: userId, content_id: item.id })
 
+    setLoading(false)
+
     if (error) {
       console.error('Erreur achat :', error)
-      setLoading(false)
       return
     }
 
-    setLoading(false)
     onUnlocked?.()
     onClose()
     alert('✅ Contenu acheté avec succès.')
@@ -94,13 +102,13 @@ export default function LockedContentModal({ item, creator, onClose, onUnlocked 
         end_date: nextMonth,
       })
 
+    setLoading(false)
+
     if (error) {
       console.error('Erreur abonnement :', error)
-      setLoading(false)
       return
     }
 
-    setLoading(false)
     onUnlocked?.()
     onClose()
     alert('✅ Abonnement activé.')

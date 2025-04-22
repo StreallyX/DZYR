@@ -12,13 +12,21 @@ export default function MessagesPage() {
 
   useEffect(() => {
     const fetchConversations = async () => {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const user = sessionData.session?.user
-      if (!user) return
+      const token = localStorage.getItem('auth-token')
+      if (!token) return
 
+      const res = await fetch('/api/auth/me', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      const data = await res.json()
+      if (!res.ok || !data.user) return
+
+      const user = data.user
       setUserId(user.id)
 
-      // Récupère toutes les conversations où le user est soit user1 soit user2
       const { data: convs, error } = await supabase
         .from('conversations')
         .select('*')
@@ -27,7 +35,6 @@ export default function MessagesPage() {
 
       setConversations(convs || [])
 
-      // Charge les profils de tous les utilisateurs liés
       const userIds = new Set<string>()
       for (const conv of convs || []) {
         if (conv.user1_id !== user.id) userIds.add(conv.user1_id)

@@ -19,18 +19,23 @@ export default function CreatorProfilePage() {
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null)
 
   const refreshViewer = async (userId: string, creatorId: string) => {
-    const { data: purchases } = await supabase
-      .from('purchases')
-      .select('content_id')
-      .eq('user_id', userId)
+    const token = localStorage.getItem('auth-token')
+    if (!token) return
 
-    const { data: subs } = await supabase
-      .from('subscriptions')
-      .select('creator_id, end_date')
-      .eq('subscriber_id', userId)
+    const [purchasesRes, subsRes] = await Promise.all([
+      supabase
+        .from('purchases')
+        .select('content_id')
+        .eq('user_id', userId),
+
+      supabase
+        .from('subscriptions')
+        .select('creator_id, end_date')
+        .eq('subscriber_id', userId)
+    ])
 
     const now = new Date()
-    const validSubs = subs?.filter(sub => new Date(sub.end_date) > now) || []
+    const validSubs = subsRes.data?.filter(sub => new Date(sub.end_date) > now) || []
     const isSub = validSubs.some(sub => sub.creator_id === creatorId)
 
     setIsSubscribed(isSub)
@@ -42,12 +47,28 @@ export default function CreatorProfilePage() {
     setViewer({
       id: userId,
       subscribedTo: validSubs.map(sub => sub.creator_id),
-      purchasedContentIds: purchases?.map(p => p.content_id) || [],
+      purchasedContentIds: purchasesRes.data?.map(p => p.content_id) || [],
     })
   }
 
   useEffect(() => {
     const fetchData = async () => {
+      const token = localStorage.getItem('auth-token')
+      if (!token) return
+
+      const authRes = await fetch('/api/auth/me', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!authRes.ok) {
+        router.push('/auth/login')
+        return
+      }
+
+      const { user } = await authRes.json()
+
       const { data: profileData } = await supabase
         .from('users')
         .select('*')
@@ -57,11 +78,6 @@ export default function CreatorProfilePage() {
       if (!profileData) return
       setProfile(profileData)
 
-      const session = await supabase.auth.getSession()
-      const user = session.data.session?.user
-      if (!user) return
-
-      // 👉 Si c’est notre propre profil, on redirige vers /profile
       if (profileData.id === user.id) {
         router.replace('/profile')
         return
@@ -116,7 +132,7 @@ export default function CreatorProfilePage() {
     }
   }
 
-  if (!profile || viewer === null) return <div>Chargement du créateur...</div>
+  if (!profile || viewer === null) return <div className="p-4">Chargement du créateur...</div>
 
   return (
     <div className="p-4">

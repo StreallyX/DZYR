@@ -1,11 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/app/contexts/AuthContext'
 import BackButton from '@/components/ui/BackButton'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 
 export default function AccountSettingsPage() {
+  const { user, setUser } = useAuth()
+  const router = useRouter()
+
   const [profile, setProfile] = useState<any>(null)
   const [bio, setBio] = useState('')
   const [price, setPrice] = useState('')
@@ -18,55 +23,44 @@ export default function AccountSettingsPage() {
 
   useEffect(() => {
     const fetchProfile = async () => {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const userId = sessionData.session?.user.id
-      if (!userId) return
+      if (!user?.id) {
+        router.push('/auth/login')
+        return
+      }
 
       const { data: profileData, error } = await supabase
         .from('users')
         .select('*')
-        .eq('id', userId)
-        .limit(1)
+        .eq('id', user.id)
+        .single()
 
-      if (error || !profileData || profileData.length === 0) {
+      if (error || !profileData) {
         console.error('Profil introuvable', error)
         return
       }
 
-      const profile = profileData[0]
-      setProfile(profile)
-      setBio(profile.bio || '')
-      setPrice(profile.subscription_price?.toString() || '')
-      setAvatarUrl(profile.avatar_url || '')
-      setBannerUrl(profile.banner_url || '')
+      setProfile(profileData)
+      setBio(profileData.bio || '')
+      setPrice(profileData.subscription_price?.toString() || '')
+      setAvatarUrl(profileData.avatar_url || '')
+      setBannerUrl(profileData.banner_url || '')
     }
 
     fetchProfile()
-  }, [])
+  }, [user, router])
 
-  const deleteFileFromStorage = async (url: string, bucket: string) => {
-    const parts = url.split('/')
-    const fileName = parts[parts.length - 1]
-    const path = fileName
-
-
-    const { error } = await supabase.storage.from(bucket).remove([path])
-    if (error) console.error(`Erreur suppression image de ${bucket}`, error)
+  const deleteFile = async (url: string, bucket: string) => {
+    const fileName = url.split('/').pop()
+    await supabase.storage.from(bucket).remove([fileName || ''])
   }
 
-  const uploadImage = async (file: File, folder: string, userId: string) => {
+  const uploadImage = async (file: File, bucket: string, userId: string) => {
     const ext = file.name.split('.').pop()
-    const filename = `${userId}-${Date.now()}.${ext}`
-    const path = `${filename}`
-
-    const { error } = await supabase.storage
-      .from(folder)
-      .upload(path, file, { upsert: true })
-
+    const path = `${userId}-${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from(bucket).upload(path, file, { upsert: true })
     if (error) throw error
-
-    const { data } = supabase.storage.from(folder).getPublicUrl(path)
-    return { publicUrl: data.publicUrl, filePath: path }
+    const { data } = supabase.storage.from(bucket).getPublicUrl(path)
+    return data.publicUrl
   }
 
   const handleSave = async () => {
@@ -76,24 +70,20 @@ export default function AccountSettingsPage() {
     let newBannerUrl = bannerUrl
 
     try {
-      // Supprimer ancienne avatar si nécessaire
       if (removeAvatar && avatarUrl) {
-        await deleteFileFromStorage(avatarUrl, 'avatars')
+        await deleteFile(avatarUrl, 'avatars')
         newAvatarUrl = ''
       } else if (avatar) {
-        if (avatarUrl) await deleteFileFromStorage(avatarUrl, 'avatars')
-        const upload = await uploadImage(avatar, 'avatars', profile.id)
-        newAvatarUrl = upload.publicUrl
+        if (avatarUrl) await deleteFile(avatarUrl, 'avatars')
+        newAvatarUrl = await uploadImage(avatar, 'avatars', profile.id)
       }
 
-      // Supprimer ancienne bannière si nécessaire
       if (removeBanner && bannerUrl) {
-        await deleteFileFromStorage(bannerUrl, 'banners')
+        await deleteFile(bannerUrl, 'banners')
         newBannerUrl = ''
       } else if (banner) {
-        if (bannerUrl) await deleteFileFromStorage(bannerUrl, 'banners')
-        const upload = await uploadImage(banner, 'banners', profile.id)
-        newBannerUrl = upload.publicUrl
+        if (bannerUrl) await deleteFile(bannerUrl, 'banners')
+        newBannerUrl = await uploadImage(banner, 'banners', profile.id)
       }
 
       const { error: updateError } = await supabase
@@ -106,102 +96,84 @@ export default function AccountSettingsPage() {
         })
         .eq('id', profile.id)
 
-      if (updateError) {
-        console.error('Erreur mise à jour profil :', updateError)
-        return
-      }
+      if (updateError) throw updateError
 
       alert('Profil mis à jour ✅')
     } catch (err) {
-      console.error('Erreur upload image :', err)
+      console.error('Erreur :', err)
+      alert('Erreur lors de la mise à jour.')
     }
   }
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    localStorage.clear()
-    window.location.href = '/'
+    const token = localStorage.getItem('auth-token')
+    if (token) {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+    }
+  
+    localStorage.clear() // ✅ tout supprimer
+    window.location.href = '/auth/login' // ✅ forcer le redirect propre
   }
+  
+
+  if (!profile) return <div className="text-center mt-12">Chargement...</div>
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <BackButton />
       <h1 className="text-3xl font-bold mb-6">Modifier mon compte</h1>
 
-      {/* Banner */}
+      {/* BANNIÈRE */}
       {bannerUrl && !removeBanner && (
         <div className="mb-2 w-full h-40 rounded-lg overflow-hidden relative">
           <Image src={bannerUrl} alt="Bannière" fill className="object-cover" />
         </div>
       )}
       <div className="flex items-center justify-between mb-4">
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => {
-            setBanner(e.target.files?.[0] ?? null)
-            setRemoveBanner(false)
-          }}
-          className="file:bg-violet-600 file:text-white file:rounded file:px-3 file:py-1"
-        />
+        <input type="file" accept="image/*" onChange={(e) => {
+          setBanner(e.target.files?.[0] ?? null)
+          setRemoveBanner(false)
+        }} />
         {bannerUrl && !removeBanner && (
-          <button onClick={() => setRemoveBanner(true)} className="text-red-500 text-sm hover:underline">
-            Supprimer bannière
-          </button>
+          <button onClick={() => setRemoveBanner(true)} className="text-red-500 text-sm">Supprimer bannière</button>
         )}
       </div>
 
-      {/* Avatar */}
+      {/* AVATAR */}
       {avatarUrl && !removeAvatar && (
         <div className="mb-2 w-24 h-24 rounded-full overflow-hidden border-2 border-violet-600">
           <Image src={avatarUrl} alt="Avatar" width={96} height={96} className="object-cover" />
         </div>
       )}
       <div className="flex items-center justify-between mb-6">
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => {
-            setAvatar(e.target.files?.[0] ?? null)
-            setRemoveAvatar(false)
-          }}
-          className="file:bg-violet-600 file:text-white file:rounded file:px-3 file:py-1"
-        />
+        <input type="file" accept="image/*" onChange={(e) => {
+          setAvatar(e.target.files?.[0] ?? null)
+          setRemoveAvatar(false)
+        }} />
         {avatarUrl && !removeAvatar && (
-          <button onClick={() => setRemoveAvatar(true)} className="text-red-500 text-sm hover:underline">
-            Supprimer avatar
-          </button>
+          <button onClick={() => setRemoveAvatar(true)} className="text-red-500 text-sm">Supprimer avatar</button>
         )}
       </div>
 
-      {/* Bio */}
+      {/* BIO */}
       <label className="block mb-1 text-sm text-zinc-400">Bio</label>
-      <textarea
-        value={bio}
-        onChange={(e) => setBio(e.target.value)}
-        className="w-full p-3 rounded bg-zinc-800 text-white mb-4"
-      />
+      <textarea value={bio} onChange={(e) => setBio(e.target.value)} className="w-full p-3 rounded bg-zinc-800 text-white mb-4" />
 
-      {/* Price */}
+      {/* PRIX */}
       <label className="block mb-1 text-sm text-zinc-400">Prix abonnement (€)</label>
-      <input
-        type="number"
-        value={price}
-        onChange={(e) => setPrice(e.target.value)}
-        className="w-full p-3 rounded bg-zinc-800 text-white mb-6"
-      />
+      <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} className="w-full p-3 rounded bg-zinc-800 text-white mb-6" />
 
-      <button
-        onClick={handleSave}
-        className="bg-violet-600 hover:bg-violet-500 text-white font-semibold py-2 px-6 rounded w-full mb-6"
-      >
+      {/* BOUTONS */}
+      <button onClick={handleSave} className="bg-violet-600 hover:bg-violet-500 text-white font-semibold py-2 px-6 rounded w-full mb-6">
         Enregistrer les modifications
       </button>
 
-      <button
-        onClick={handleLogout}
-        className="text-red-500 hover:underline text-sm"
-      >
+      <button onClick={handleLogout} className="text-red-500 hover:underline text-sm">
         Se déconnecter
       </button>
     </div>

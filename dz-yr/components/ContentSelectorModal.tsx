@@ -14,15 +14,23 @@ export default function ContentSelectorModal({ onSelect, onClose }: Props) {
 
   useEffect(() => {
     const fetchMyContents = async () => {
-      const { data: session } = await supabase.auth.getSession()
-      const userId = session.session?.user.id
+      const token = localStorage.getItem('auth-token')
+      if (!token) return
 
-      if (!userId) return
+      const res = await fetch('/api/auth/me', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!res.ok) return
+      const { user } = await res.json()
+      if (!user?.id) return
 
       const { data, error } = await supabase
         .from('contents')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', user.id)
 
       if (error) console.error('Erreur contenu :', error)
       else setContents(data)

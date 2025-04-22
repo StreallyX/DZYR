@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import sharp from 'sharp'
 import { createClient } from '@supabase/supabase-js'
+import { getUserIdFromToken } from '@/lib/session'
 
-// 🔐 Encode chaque bit dans le 2ᵉ bit du canal rouge, bloc 6x6
+// Encode chaque bit dans le 2ᵉ bit du canal rouge, bloc 6x6
 function encodeRobustLSB(pixels: Buffer, width: number, height: number, message: string, blockSize = 6): Buffer {
   const result = Buffer.from(pixels)
   let bitIndex = 0
@@ -23,7 +24,6 @@ function encodeRobustLSB(pixels: Buffer, width: number, height: number, message:
           if (x >= width || y >= height) continue
 
           const idx = (y * width + x) * 4
-          // Encode dans le 2ᵉ bit (bit 1), donc valeur +2 ou -2
           result[idx] = (result[idx] & 0b11111101) | (bit << 6)
         }
       }
@@ -43,30 +43,35 @@ export async function GET(req: NextRequest) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '')
   if (!token) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
+  const userId = await getUserIdFromToken(token)
+  if (!userId) return NextResponse.json({ error: 'Utilisateur non connecté' }, { status: 401 })
+
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    }
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Utilisateur non connecté' }, { status: 401 })
+  const { data: user } = await supabase
+    .from('users')
+    .select('username, email')
+    .eq('id', userId)
+    .single()
 
-  const { data: signed } = await supabase.storage
+  if (!user) return NextResponse.json({ error: 'Profil non trouvé' }, { status: 404 })
+
+  const { data: signed } = await supabase
+    .storage
     .from('contents')
     .createSignedUrl(path, 60)
+
   if (!signed?.signedUrl) return NextResponse.json({ error: 'Fichier non trouvé' }, { status: 404 })
 
   const res = await fetch(signed.signedUrl)
   const arrayBuffer = await res.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
 
-  const username = user.user_metadata?.username || user.email || 'user'
-  const trace = `TraceID:${user.id.slice(0, 16)}`
+  const username = user.username || user.email || 'user'
+  const trace = `TraceID:${userId.slice(0, 16)}`
 
   const original = sharp(buffer).ensureAlpha()
   const { width = 600, height = 600 } = await original.metadata()

@@ -9,10 +9,14 @@ type Props = {
     subscribedTo?: string[]
     purchasedContentIds?: string[]
   }
-  onRefresh?: () => void // ✅ on rend cette prop optionnelle
+  onRefresh?: () => void
 }
 
 export default function ContentFeed({ contents, viewer, onRefresh }: Props) {
+  if (!viewer?.id) {
+    return <div className="text-center text-red-500">⚠️ Non connecté</div>
+  }
+
   return (
     <div className="flex flex-col gap-4 px-4 mt-6">
       {contents.map((content) => (
@@ -20,7 +24,7 @@ export default function ContentFeed({ contents, viewer, onRefresh }: Props) {
           key={content.id}
           contentId={content.id}
           viewer={viewer}
-          onUnlocked={onRefresh} // ✅ Propagée au bon endroit
+          onUnlocked={onRefresh}
         />
       ))}
     </div>

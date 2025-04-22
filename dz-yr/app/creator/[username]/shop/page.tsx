@@ -6,7 +6,6 @@ import { supabase } from '@/lib/supabase'
 import ContentFeed from '@/components/ContentFeed'
 import BackButton from '@/components/ui/BackButton'
 
-
 export default function ShopPage() {
   const { username } = useParams()
   const [shopContents, setShopContents] = useState<any[]>([])
@@ -35,33 +34,41 @@ export default function ShopPage() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: user } = await supabase
+      if (!username) return
+
+      const token = localStorage.getItem('auth-token')
+      if (!token) return
+
+      const meRes = await fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      const { user } = await meRes.json()
+      if (!user) return
+
+      const { data: userProfile } = await supabase
         .from('users')
         .select('*')
         .eq('username', username)
         .single()
 
-      if (!user) return
+      if (!userProfile) return
 
       const { data: contents } = await supabase
         .from('contents')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', userProfile.id)
         .eq('is_shop_item', true)
 
       setShopContents(contents || [])
 
-      const session = await supabase.auth.getSession()
-      const currentUser = session.data.session?.user
-      if (!currentUser) return
-
-      await refreshViewer(currentUser.id)
+      await refreshViewer(user.id)
     }
 
-    if (username) load()
+    load()
   }, [username])
 
-  if (!viewer) return <div>Chargement...</div>
+  if (!viewer) return <div className="p-4">Chargement...</div>
 
   return (
     <div className="max-w-xl mx-auto px-4 py-6">

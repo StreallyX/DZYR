@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@/app/contexts/AuthContext'
 
 export default function AuthForm() {
   const [email, setEmail] = useState('')
@@ -10,8 +10,10 @@ export default function AuthForm() {
   const [username, setUsername] = useState('')
   const [isLogin, setIsLogin] = useState(true)
   const [error, setError] = useState('')
-  const [acceptTerms, setAcceptTerms] = useState(false) // ✅ nouveau champ
+  const [acceptTerms, setAcceptTerms] = useState(false)
+
   const router = useRouter()
+  const { setUser } = useAuth() // ✅ pour mise à jour immédiate du contexte
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,72 +30,51 @@ export default function AuthForm() {
     }
 
     if (isLogin) {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) {
-        setError('Identifiants invalides ou email non confirmé.')
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'Erreur lors de la connexion.')
       } else {
+        localStorage.setItem('auth-token', data.token) // ✅ stocke le token
+        setUser(data.user) // ✅ met à jour le contexte immédiatement
         router.push('/profile')
       }
     } else {
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-          data: { username },
-        },
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, username }),
       })
 
-      if (signUpError) {
-        if (signUpError.message.includes('Password should be')) {
-          setError('Mot de passe trop faible (min. 6 caractères).')
-        } else {
-          setError(signUpError.message)
-        }
-        return
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'Erreur lors de l’inscription.')
+      } else {
+        alert('📨 Vérifie tes e-mails pour confirmer ton compte.')
+        setIsLogin(true)
       }
-
-      const { data: userData, error: sessionError } = await supabase.auth.getUser()
-
-      if (sessionError || !userData?.user) {
-        setError("Erreur : impossible de récupérer l'utilisateur.")
-        return
-      }
-
-      const userId = userData.user.id
-
-      const { error: insertError } = await supabase.from('users').insert([{
-        id: userId,
-        username,
-        bio: '',
-        subscription_price: 0,
-        avatar_url: '',
-      }])
-
-      if (insertError) {
-        setError("Erreur lors de la création du profil : " + insertError.message)
-        return
-      }
-
-      alert('📨 Vérifie ta boîte mail pour confirmer ton compte.')
-      setIsLogin(true)
     }
   }
 
   return (
     <div className="max-w-md mx-auto p-4 pt-24">
-      <h2 className="text-xl font-bold mb-4 text-white">{isLogin ? 'Connexion' : 'Inscription'}</h2>
+      <h2 className="text-xl font-bold mb-4 text-white">
+        {isLogin ? 'Connexion' : 'Inscription'}
+      </h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         {!isLogin && (
-          <>
-            <input
-              className="border p-2 w-full text-white bg-zinc-900 placeholder-zinc-400"
-              type="text"
-              placeholder="Nom d'utilisateur"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-            />
-          </>
+          <input
+            className="border p-2 w-full text-white bg-zinc-900 placeholder-zinc-400"
+            type="text"
+            placeholder="Nom d'utilisateur"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
         )}
         <input
           className="border p-2 w-full text-white bg-zinc-900 placeholder-zinc-400"
@@ -118,7 +99,11 @@ export default function AuthForm() {
               onChange={(e) => setAcceptTerms(e.target.checked)}
               className="mr-2"
             />
-            J’accepte les <a href="/terms" target="_blank" className="underline ml-1">conditions d’utilisation</a>.
+            J’accepte les{' '}
+            <a href="/terms" target="_blank" className="underline ml-1">
+              conditions d’utilisation
+            </a>
+            .
           </label>
         )}
 

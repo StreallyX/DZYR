@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
 
 type Props = {
   contentId: string
@@ -15,37 +14,46 @@ export default function SecureVideoPlayer({ contentId, className }: Props) {
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData.session?.access_token
-      const userId = sessionData.session?.user.id
-
-      if (!token || !userId) {
+      const token = localStorage.getItem('auth-token')
+      if (!token) {
         setError('Utilisateur non connecté')
         return
       }
 
-      // Get signed video URL
-      const res = await fetch(`/api/video/${contentId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      try {
+        // 🔐 Récupère l'utilisateur (pour le watermark)
+        const userRes = await fetch('/api/auth/me', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
 
-      if (res.ok) {
-        setVideoUrl(res.url)
-      } else {
-        const data = await res.json()
-        setError(data.error || 'Erreur inconnue')
+        if (!userRes.ok) {
+          setError('Utilisateur non authentifié')
+          return
+        }
+
+        const { user } = await userRes.json()
+        setUsername(user.username)
+
+        // 🎬 Récupère la vidéo protégée
+        const videoRes = await fetch(`/api/video/${contentId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!videoRes.ok) {
+          const err = await videoRes.json()
+          setError(err.error || 'Erreur vidéo')
+          return
+        }
+
+        setVideoUrl(videoRes.url) // <- pour redirect 302, ce sera null, donc on force ci-dessous
+        setVideoUrl(videoRes.url || videoRes.headers.get('location') || videoRes.url)
+      } catch (err: any) {
+        setError(err.message || 'Erreur inconnue')
       }
-
-      // Get username for watermark
-      const { data: profile } = await supabase
-        .from('users')
-        .select('username')
-        .eq('id', userId)
-        .single()
-
-      setUsername(profile?.username ?? null)
     }
 
     fetchData()

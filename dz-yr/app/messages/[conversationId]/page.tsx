@@ -106,13 +106,21 @@ export default function ConversationPage() {
   /* --- init (user, viewer, premier lot) --- */
   useEffect(() => {
     const run = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      const user = session?.user
-      if (!user) return
+      const token = localStorage.getItem('auth-token')
+      if (!token) return
+    
+      const res = await fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+    
+      if (!res.ok) return
+    
+      const { user } = await res.json()
       setUid(user.id)
       await refreshViewer(user.id)
-      await fetchBatch()                       // latest
+      await fetchBatch() // latest
     }
+    
     if (conversationId) run()
   }, [conversationId])
 
@@ -163,6 +171,13 @@ export default function ConversationPage() {
       content:         newMsg.trim() || null,
       content_id:      sel?.id ?? null
     }])
+    await supabase.from('conversations')
+      .update({
+        last_message: newMsg.trim() || '[Contenu envoyé]',
+        last_message_at: new Date().toISOString(),
+      })
+      .eq('id', conversationId)
+      await refreshViewer(userId) // <= ajoute ça ici
     setNew(''); setSel(null)
     setTimeout(() => scrollToBottom(true), 40)
   }
@@ -186,20 +201,42 @@ export default function ConversationPage() {
           const isMe = m.sender_id === userId
           return (
             <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-xs px-4 py-2 rounded-xl ${isMe ? 'bg-blue-500 text-white' : 'bg-zinc-300 text-black'}`}>
-                {m.content_id
-                  ? <ContentPreviewCard contentId={m.content_id} viewer={viewer} />
-                  : m.content}
+              <div className={`max-w-xs p-3 rounded-xl space-y-2 ${isMe ? 'bg-blue-500 text-white' : 'bg-zinc-300 text-black'}`}>
+                {m.content && <p className="text-sm break-words">{m.content}</p>}
+                {m.content_id && (
+                  <ContentPreviewCard
+                  contentId={m.content_id}
+                  viewer={viewer}
+                  onUnlocked={() => refreshViewer(userId)}
+                />
+                
+                )}
               </div>
             </div>
           )
         })}
+
         {loading && <p className="text-center text-xs text-gray-400">⏳ Chargement…</p>}
         <div ref={bottomRef} />
       </div>
 
       {/* Footer fixe en bas */}
-      <div className="border-t border-zinc-800 bg-zinc-950 p-3 h-16 shrink-0">
+      <div className="border-t border-zinc-800 bg-zinc-950 p-3 shrink-0">
+        {/* Si un contenu est sélectionné, on l'affiche ici */}
+        {sel && (
+          <div className="mb-2 bg-zinc-800 text-white p-2 rounded text-sm flex justify-between items-center">
+            <span>
+              ✅ Contenu sélectionné : <strong>{sel.description || 'Sans titre'}</strong>
+            </span>
+            <button
+              onClick={() => setSel(null)}
+              className="text-red-400 text-xs ml-4 hover:text-red-300"
+            >
+              ✖ Retirer
+            </button>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <input
             value={newMsg}
@@ -208,9 +245,21 @@ export default function ConversationPage() {
             placeholder="Votre message…"
             className="flex-1 bg-zinc-900 text-white p-2 rounded"
           />
-          <button onClick={send} className="bg-violet-600 px-4 rounded">Envoyer</button>
+          <button
+            onClick={() => setModal(true)}
+            className="bg-gray-700 hover:bg-gray-600 text-white px-2 rounded text-sm"
+          >
+            📎
+          </button>
+          <button
+            onClick={send}
+            className="bg-violet-600 hover:bg-violet-500 px-4 text-white rounded"
+          >
+            Envoyer
+          </button>
         </div>
       </div>
+
 
       {showModal && (
         <ContentSelectorModal

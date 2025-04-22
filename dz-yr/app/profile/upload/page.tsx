@@ -1,25 +1,23 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 import BackButton from '@/components/ui/BackButton'
-
+import { useAuth } from '@/app/contexts/AuthContext'
 
 export default function UploadContentPage() {
+  const { user } = useAuth()
   const [file, setFile] = useState<File | null>(null)
-  const [title, setTitle] = useState('') // <-- Nouveau state pour le titre
+  const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [price, setPrice] = useState(0)
   const [accessType, setAccessType] = useState<'free' | 'subscription' | 'paid'>('free')
+
   const router = useRouter()
 
   const handleUpload = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user || !file || !title.trim()) return // <-- On exige un titre non vide
+    if (!user || !file || !title.trim()) return
 
     const fileExt = file.name.split('.').pop()
     const fileName = `${user.id}-${Date.now()}.${fileExt}`
@@ -46,7 +44,7 @@ export default function UploadContentPage() {
 
     const contentData = {
       user_id: user.id,
-      title, // <-- Ajout du titre ici
+      title,
       description,
       media_path: filePath,
       media_type: mediaType,
@@ -58,7 +56,6 @@ export default function UploadContentPage() {
     }
 
     const { error: insertError } = await supabase.from('contents').insert([contentData])
-
     if (insertError) {
       console.error('Erreur insertion DB :', insertError)
     } else {
@@ -70,12 +67,6 @@ export default function UploadContentPage() {
   return (
     <div className="p-4 max-w-xl mx-auto">
       <BackButton />
-      <button
-        onClick={() => router.back()}
-        className="text-sm mb-4 text-white hover:underline"
-      >
-        ← Retour
-      </button>
 
       <h1 className="text-xl font-bold mb-4 text-white">Ajouter un contenu</h1>
 
