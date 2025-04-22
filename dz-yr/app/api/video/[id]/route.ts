@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getUserIdFromToken } from '@/lib/session'
 
-export async function GET(req: NextRequest, context: { params: { id: string } }) {
-  const { params } = context
-  const contentId = params.id
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url)
+  const segments = url.pathname.split('/')
+  const contentId = segments[segments.length - 1] // dernière partie de l'URL
   console.log("📥 Requête vidéo reçue pour ID :", contentId)
 
   const token = req.headers.get('Authorization')?.replace('Bearer ', '')
