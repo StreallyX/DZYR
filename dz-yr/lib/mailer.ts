@@ -30,5 +30,28 @@ export async function sendVerificationEmail(email: string, token: string) {
   }
 }
 
+export async function sendPasswordResetEmail(email: string, token: string) {
+  const resetLink = `${process.env.APP_URL}/auth/reset-password?token=${token}`
+
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  })
+
+  await transporter.sendMail({
+    from: process.env.EMAIL_FROM,
+    to: email,
+    subject: 'Réinitialisation de votre mot de passe - DZYR',
+    html: `
+      <p>Vous avez demandé une réinitialisation de mot de passe pour votre compte DZYR.</p>
+      <p>Cliquez ici pour réinitialiser : <a href="${resetLink}">${resetLink}</a></p>
+      <p>Ce lien expire dans 30 minutes.</p>
+    `,
+  })
+}
+
 
   
