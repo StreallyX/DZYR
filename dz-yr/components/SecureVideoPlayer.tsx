@@ -21,7 +21,6 @@ export default function SecureVideoPlayer({ contentId, className }: Props) {
       }
 
       try {
-        // 🔐 Récupère l'utilisateur (pour le watermark)
         const userRes = await fetch('/api/auth/me', {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -29,29 +28,45 @@ export default function SecureVideoPlayer({ contentId, className }: Props) {
         })
 
         if (!userRes.ok) {
-          setError('Utilisateur non authentifié')
-          return
+          const contentType = userRes.headers.get('content-type')
+          if (contentType?.includes('application/json')) {
+            const err = await userRes.json()
+            throw new Error(err?.error || 'Utilisateur non authentifié')
+          } else {
+            throw new Error('Réponse non JSON (auth/me)')
+          }
         }
 
         const { user } = await userRes.json()
         setUsername(user.username)
 
-        // 🎬 Récupère la vidéo protégée
         const videoRes = await fetch(`/api/video/${contentId}`, {
+          method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
           },
         })
 
         if (!videoRes.ok) {
-          const err = await videoRes.json()
-          setError(err.error || 'Erreur vidéo')
-          return
+          const contentType = videoRes.headers.get('content-type')
+          if (contentType?.includes('application/json')) {
+            const err = await videoRes.json()
+            throw new Error(err?.error || 'Erreur vidéo')
+          } else {
+            throw new Error('Erreur inconnue (non JSON)')
+          }
         }
 
-        setVideoUrl(videoRes.url) // <- pour redirect 302, ce sera null, donc on force ci-dessous
-        setVideoUrl(videoRes.url || videoRes.headers.get('location') || videoRes.url)
+        const redirectedUrl =
+          videoRes.url || videoRes.headers.get('location') || null
+
+        if (!redirectedUrl) {
+          throw new Error("URL de la vidéo non trouvée.")
+        }
+
+        setVideoUrl(redirectedUrl)
       } catch (err: any) {
+        console.error('[SecureVideoPlayer]', err)
         setError(err.message || 'Erreur inconnue')
       }
     }

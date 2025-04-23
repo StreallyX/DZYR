@@ -23,34 +23,42 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   useEffect(() => {
     const checkUser = async () => {
       const token = localStorage.getItem('auth-token')
-      if (!token) {
+
+      // ✅ Autoriser l'accès libre à la LandingPage ("/") et /auth/*
+      if (!token && !isLanding && !isAuthPage) {
         setCheckingAuth(false)
         router.push('/auth/login')
         return
       }
-  
+
+      if (!token) {
+        setCheckingAuth(false)
+        return
+      }
+
       const res = await fetch('/api/auth/me', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
-  
+
       if (!res.ok) {
         setCheckingAuth(false)
-        router.push('/auth/login')
+        if (!isLanding && !isAuthPage) {
+          router.push('/auth/login')
+        }
         return
       }
-  
+
       const data = await res.json()
       setUser(data.user)
       setCheckingAuth(false)
     }
-  
-    checkUser()
-  }, [router])
-  
 
-  if (checkingAuth && !isAuthPage) {
+    checkUser()
+  }, [router, isLanding, isAuthPage])
+
+  if (checkingAuth && !isAuthPage && !isLanding) {
     return <div className="text-center pt-10">Chargement...</div>
   }
 
