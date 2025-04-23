@@ -13,9 +13,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const isMessagePage = /^\/messages\/[^/]+$/.test(pathname)
   const isLanding = pathname === '/'
   const isAuthPage = pathname.startsWith('/auth')
+  const isConditionsPage = pathname.startsWith('/conditions')
+  const isPrivacyPage = pathname.startsWith('/privacy')
+  const isPublicPage = isLanding || isConditionsPage || isPrivacyPage
 
   const hideHeader = isMessagePage
-  const hideBottomNav = isMessagePage || isLanding || isAuthPage
+  const hideBottomNav = isMessagePage || isLanding || isAuthPage || isConditionsPage
 
   const [checkingAuth, setCheckingAuth] = useState(true)
   const [user, setUser] = useState<any>(null)
@@ -24,14 +27,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     const checkUser = async () => {
       const token = localStorage.getItem('auth-token')
 
-      // ✅ Autoriser l'accès libre à la LandingPage ("/") et /auth/*
-      if (!token && !isLanding && !isAuthPage) {
-        setCheckingAuth(false)
-        router.push('/auth/login')
-        return
-      }
-
       if (!token) {
+        if (!isPublicPage && !isAuthPage) {
+          router.replace('/auth/login')
+        }
         setCheckingAuth(false)
         return
       }
@@ -43,10 +42,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       })
 
       if (!res.ok) {
-        setCheckingAuth(false)
-        if (!isLanding && !isAuthPage) {
-          router.push('/auth/login')
+        if (!isPublicPage && !isAuthPage) {
+          router.replace('/auth/login')
         }
+        setCheckingAuth(false)
         return
       }
 
@@ -56,9 +55,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     }
 
     checkUser()
-  }, [router, isLanding, isAuthPage])
+  }, [pathname])
 
-  if (checkingAuth && !isAuthPage && !isLanding) {
+  if (checkingAuth && !isPublicPage && !isAuthPage) {
     return <div className="text-center pt-10">Chargement...</div>
   }
 

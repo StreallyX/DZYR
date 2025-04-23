@@ -6,6 +6,7 @@ import { getUserIdFromToken } from '@/lib/session'
 function encodeRobustLSB(pixels: Buffer, width: number, height: number, message: string, blockSize = 6): Buffer {
   const result = Buffer.from(pixels)
   let bitIndex = 0
+  console.log('🔧 LSB encoding démarré')
 
   for (let i = 0; i < message.length; i++) {
     const charCode = message.charCodeAt(i)
@@ -29,31 +30,26 @@ function encodeRobustLSB(pixels: Buffer, width: number, height: number, message:
     }
   }
 
+  console.log('✅ LSB encoding terminé')
   return result
 }
 
 export async function GET(req: NextRequest) {
-  try {
-    console.log('🟣 [API] Requête /generate-image reçue')
+  console.log('🚀 [generate-image] Requête reçue')
 
+  try {
     const { searchParams } = new URL(req.url)
     const path = searchParams.get('path')
-    console.log('📦 Param path =', path)
-    if (!path) {
-      return NextResponse.json({ error: 'Path manquant' }, { status: 400 })
-    }
+    console.log('📦 path =', path)
+    if (!path) return NextResponse.json({ error: 'Path manquant' }, { status: 400 })
 
     const token = req.headers.get('Authorization')?.replace('Bearer ', '')
-    console.log('🔐 Token reçu :', token?.slice(0, 20) + '...')
-    if (!token) {
-      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
-    }
+    console.log('🔐 Token =', token?.slice(0, 10) + '...')
+    if (!token) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
     const userId = await getUserIdFromToken(token)
-    console.log('👤 User ID récupéré :', userId)
-    if (!userId) {
-      return NextResponse.json({ error: 'Utilisateur non connecté' }, { status: 401 })
-    }
+    console.log('👤 User ID =', userId)
+    if (!userId) return NextResponse.json({ error: 'Utilisateur non connecté' }, { status: 401 })
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -67,14 +63,15 @@ export async function GET(req: NextRequest) {
       .single()
 
     if (userError) {
-      console.error('❌ Erreur récupération profil :', userError)
+      console.error('❌ Erreur profil Supabase :', userError)
       return NextResponse.json({ error: 'Erreur profil', details: userError.message }, { status: 500 })
     }
     if (!user) {
+      console.warn('❌ Aucun profil trouvé')
       return NextResponse.json({ error: 'Profil non trouvé' }, { status: 404 })
     }
 
-    console.log('📄 Utilisateur =', user.username || user.email)
+    console.log('📄 Utilisateur identifié =', user.username || user.email)
 
     const { data: signed, error: signedError } = await supabase
       .storage
@@ -86,42 +83,47 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Erreur URL signée', details: signedError.message }, { status: 500 })
     }
     if (!signed?.signedUrl) {
+      console.warn('❌ Fichier introuvable dans le storage')
       return NextResponse.json({ error: 'Fichier non trouvé' }, { status: 404 })
     }
 
-    console.log('🔗 URL signée =', signed.signedUrl)
+    console.log('🔗 URL Supabase =', signed.signedUrl)
 
     const res = await fetch(signed.signedUrl)
+    console.log('⏬ Téléchargement de l’image en cours... status =', res.status)
     if (!res.ok) {
       return NextResponse.json({ error: 'Téléchargement échoué', details: res.statusText }, { status: 500 })
     }
 
     const arrayBuffer = await res.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
+    console.log('📥 Image téléchargée :', buffer.length, 'octets')
 
     const username = user.username || user.email || 'user'
     const trace = `TraceID:${userId.slice(0, 16)}`
-    console.log('🔍 Encodage avec trace :', trace)
+    console.log('🔍 trace =', trace)
 
     let original
     try {
+      console.log('🛠️ Appel de sharp(buffer)...')
       original = sharp(buffer).ensureAlpha()
     } catch (e: any) {
-      console.error('❌ sharp() failed:', e)
-      return NextResponse.json({ error: 'Image invalide', details: e.message }, { status: 500 })
+      console.error('💥 sharp(buffer) failed :', e)
+      return NextResponse.json({ error: 'Erreur sharp', details: e.message }, { status: 500 })
     }
 
     let metadata
     try {
       metadata = await original.metadata()
-      console.log('📐 Dimensions image :', metadata.width, 'x', metadata.height)
+      console.log('📐 Metadata =', metadata)
     } catch (e: any) {
-      console.error('❌ metadata() failed:', e)
-      return NextResponse.json({ error: 'Impossible de lire metadata', details: e.message }, { status: 500 })
+      console.error('💥 metadata() failed :', e)
+      return NextResponse.json({ error: 'Erreur metadata', details: e.message }, { status: 500 })
     }
 
     const width = metadata.width || 600
     const height = metadata.height || 600
+    console.log('📏 width =', width, '| height =', height)
 
     const watermarkSvg = Buffer.from(`
       <svg width="${width}" height="50">
@@ -132,12 +134,14 @@ export async function GET(req: NextRequest) {
 
     let composited
     try {
+      console.log('🎨 Composition avec watermark...')
       composited = await original
         .composite([{ input: watermarkSvg, top: height - 50, left: 0 }])
         .raw()
         .toBuffer({ resolveWithObject: true })
+      console.log('✅ Composition réussie')
     } catch (e: any) {
-      console.error('❌ compositing failed:', e)
+      console.error('💥 Erreur watermark/composite :', e)
       return NextResponse.json({ error: 'Erreur watermark', details: e.message }, { status: 500 })
     }
 
@@ -149,6 +153,7 @@ export async function GET(req: NextRequest) {
       6
     )
 
+    console.log('📦 sharp final pour PNG...')
     const finalPng = await sharp(encoded, {
       raw: {
         width: composited.info.width,
@@ -157,7 +162,7 @@ export async function GET(req: NextRequest) {
       },
     }).png().toBuffer()
 
-    console.log('✅ Image finale générée et retournée')
+    console.log('✅ Image finale générée')
     return new NextResponse(finalPng, {
       status: 200,
       headers: {
@@ -165,8 +170,9 @@ export async function GET(req: NextRequest) {
         'Cache-Control': 'no-store',
       },
     })
+
   } catch (err: any) {
-    console.error('🔥 [API /generate-image] Erreur globale :', err)
+    console.error('🔥 [generate-image] ERREUR GLOBALE :', err)
     return NextResponse.json({ error: 'Erreur serveur interne', details: err.message }, { status: 500 })
   }
 }
