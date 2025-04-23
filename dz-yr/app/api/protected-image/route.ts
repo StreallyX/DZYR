@@ -20,21 +20,19 @@ export async function GET(req: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
 
-    const { data: user, error: userError } = await supabase
+    const { data: user } = await supabase
       .from('users')
       .select('username, email')
       .eq('id', userId)
       .single()
 
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Profil introuvable' }, { status: 404 })
-    }
+    if (!user) return NextResponse.json({ error: 'Profil introuvable' }, { status: 404 })
 
-    const { data: signed, error: signedError } = await supabase.storage
+    const { data: signed } = await supabase.storage
       .from('contents')
       .createSignedUrl(path, 60)
 
-    if (signedError || !signed?.signedUrl) {
+    if (!signed?.signedUrl) {
       return NextResponse.json({ error: 'Erreur URL signée' }, { status: 500 })
     }
 
@@ -46,29 +44,33 @@ export async function GET(req: NextRequest) {
     const buffer = Buffer.from(await res.arrayBuffer())
     const username = user.username || user.email || 'user'
 
-    const image = sharp(buffer)
+    // 🖼 Préparation image
+    const image = sharp(buffer).ensureAlpha()
     const metadata = await image.metadata()
     const width = metadata.width || 600
     const height = metadata.height || 600
 
+    // 🔖 SVG watermark adapté à la largeur de l'image
     const watermarkSvg = Buffer.from(`
-      <svg width="${width}" height="50">
-        <text x="10" y="35" font-size="20" fill="white">@${username} – DZYR</text>
+      <svg width="${width}" height="40">
+        <style>.text { font-size: 20px; fill: white; font-family: Arial; }</style>
+        <text x="10" y="25" class="text">@${username} – DZYR</text>
       </svg>
     `)
 
-    const finalBuffer = await image
-      .composite([{ input: watermarkSvg, top: height - 50, left: 0 }])
+    const final = await image
+      .composite([{ input: watermarkSvg, top: height - 40, left: 0 }])
       .png()
       .toBuffer()
 
-    return new NextResponse(finalBuffer, {
+    return new NextResponse(final, {
       status: 200,
       headers: {
         'Content-Type': 'image/png',
         'Cache-Control': 'no-store',
       },
     })
+
   } catch (err: any) {
     console.error('🔥 [protected-image] Erreur :', err)
     return NextResponse.json({ error: 'Erreur serveur interne', details: err.message }, { status: 500 })
