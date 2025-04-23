@@ -15,52 +15,65 @@ export default function SecureImageViewer({ path, className }: Props) {
   useEffect(() => {
     const loadImage = async () => {
       const token = localStorage.getItem('auth-token')
-      console.log('[SecureImageViewer] Token récupéré :', token)
+      console.log('[SecureImageViewer] 🟪 Token récupéré :', token)
 
       if (!token) {
         setError('Non connecté (pas de token)')
+        console.warn('[SecureImageViewer] ⚠️ Aucun token trouvé.')
         return
       }
 
       try {
+        // 🔐 Vérifie l'utilisateur
+        console.log('[SecureImageViewer] 🔄 Requête /api/auth/me...')
         const userRes = await fetch('/api/auth/me', {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         })
-
         console.log('[SecureImageViewer] /api/auth/me status:', userRes.status)
+
         if (!userRes.ok) {
           const contentType = userRes.headers.get('content-type')
           if (contentType?.includes('application/json')) {
             const errorJson = await userRes.json()
+            console.error('[SecureImageViewer] ❌ Erreur auth JSON :', errorJson)
             throw new Error(errorJson?.error || 'Utilisateur non connecté')
           } else {
+            console.error('[SecureImageViewer] ❌ Erreur auth non-JSON')
             throw new Error('Erreur de réponse (non JSON)')
           }
         }
 
         const userJson = await userRes.json()
         setUsername(userJson.user?.username)
+        console.log('[SecureImageViewer] ✅ Utilisateur =', userJson.user?.username)
 
+        // 🖼 Télécharge l'image protégée
+        console.log('[SecureImageViewer] 🔄 Requête /api/generate-image...')
         const imageRes = await fetch(`/api/generate-image?path=${encodeURIComponent(path)}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         })
+        console.log('[SecureImageViewer] /api/generate-image status:', imageRes.status)
 
         if (!imageRes.ok) {
           const contentType = imageRes.headers.get('content-type')
           if (contentType?.includes('application/json')) {
             const err = await imageRes.json()
-            throw new Error(err.error || 'Erreur chargement image')
+            console.error('[SecureImageViewer] ❌ Erreur image JSON :', err)
+            throw new Error(err.error + (err.details ? ` → ${err.details}` : ''))
           } else {
+            const text = await imageRes.text()
+            console.error('[SecureImageViewer] ❌ Erreur image brut :', text.slice(0, 200))
             throw new Error('Erreur inconnue (réponse non JSON)')
           }
         }
 
         const blob = await imageRes.blob()
         const imageUrl = URL.createObjectURL(blob)
+        console.log('[SecureImageViewer] ✅ Image blob chargée')
 
         const img = new Image()
         img.onload = () => {
@@ -75,10 +88,11 @@ export default function SecureImageViewer({ path, className }: Props) {
           ctx.drawImage(img, 0, 0)
 
           URL.revokeObjectURL(imageUrl)
+          console.log('[SecureImageViewer] 🎨 Image affichée sur le canvas')
         }
         img.src = imageUrl
       } catch (err: any) {
-        console.error('[SecureImageViewer] Erreur loadImage :', err)
+        console.error('[SecureImageViewer] 🛑 Erreur loadImage :', err)
         setError(err.message)
       }
     }
