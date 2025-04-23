@@ -36,79 +36,103 @@ function encodeRobustLSB(pixels: Buffer, width: number, height: number, message:
 }
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url)
-  const path = searchParams.get('path')
-  if (!path) return NextResponse.json({ error: 'Path manquant' }, { status: 400 })
+  try {
+    console.log('🟣 [API] Requête /generate-image reçue')
 
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
-  if (!token) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
+    const { searchParams } = new URL(req.url)
+    const path = searchParams.get('path')
+    console.log('📦 Param path =', path)
+    if (!path) return NextResponse.json({ error: 'Path manquant' }, { status: 400 })
 
-  const userId = await getUserIdFromToken(token)
-  if (!userId) return NextResponse.json({ error: 'Utilisateur non connecté' }, { status: 401 })
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+    console.log('🔐 Token reçu :', token?.slice(0, 20) + '...')
+    if (!token) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 })
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+    const userId = await getUserIdFromToken(token)
+    console.log('👤 User ID récupéré :', userId)
+    if (!userId) return NextResponse.json({ error: 'Utilisateur non connecté' }, { status: 401 })
 
-  const { data: user } = await supabase
-    .from('users')
-    .select('username, email')
-    .eq('id', userId)
-    .single()
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
 
-  if (!user) return NextResponse.json({ error: 'Profil non trouvé' }, { status: 404 })
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('username, email')
+      .eq('id', userId)
+      .single()
 
-  const { data: signed } = await supabase
-    .storage
-    .from('contents')
-    .createSignedUrl(path, 60)
+    if (userError) console.error('❌ Erreur récupération profil :', userError)
+    if (!user) return NextResponse.json({ error: 'Profil non trouvé' }, { status: 404 })
 
-  if (!signed?.signedUrl) return NextResponse.json({ error: 'Fichier non trouvé' }, { status: 404 })
+    console.log('📄 Utilisateur =', user.username || user.email)
 
-  const res = await fetch(signed.signedUrl)
-  const arrayBuffer = await res.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
+    const { data: signed, error: signedError } = await supabase
+      .storage
+      .from('contents')
+      .createSignedUrl(path, 60)
 
-  const username = user.username || user.email || 'user'
-  const trace = `TraceID:${userId.slice(0, 16)}`
+    if (signedError) console.error('❌ Erreur création URL signée :', signedError)
+    if (!signed?.signedUrl) return NextResponse.json({ error: 'Fichier non trouvé' }, { status: 404 })
 
-  const original = sharp(buffer).ensureAlpha()
-  const { width = 600, height = 600 } = await original.metadata()
+    console.log('🔗 URL signée =', signed.signedUrl)
 
-  const watermarkSvg = Buffer.from(`
-    <svg width="${width}" height="50">
-      <style>.text { font-size: 20px; fill: white; font-family: Arial; }</style>
-      <text x="10" y="35" class="text">@${username} – DZYR</text>
-    </svg>
-  `)
+    const res = await fetch(signed.signedUrl)
+    if (!res.ok) {
+      console.error('❌ Erreur de téléchargement image :', res.status, res.statusText)
+      return NextResponse.json({ error: 'Téléchargement échoué' }, { status: 500 })
+    }
 
-  const composited = await original
-    .composite([{ input: watermarkSvg, top: height - 50, left: 0 }])
-    .raw()
-    .toBuffer({ resolveWithObject: true })
+    const arrayBuffer = await res.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
 
-  const encoded = encodeRobustLSB(
-    composited.data,
-    composited.info.width,
-    composited.info.height,
-    trace,
-    6
-  )
+    const username = user.username || user.email || 'user'
+    const trace = `TraceID:${userId.slice(0, 16)}`
+    console.log('🔍 Encodage avec trace :', trace)
 
-  const finalPng = await sharp(encoded, {
-    raw: {
-      width: composited.info.width,
-      height: composited.info.height,
-      channels: composited.info.channels,
-    },
-  }).png().toBuffer()
+    const original = sharp(buffer).ensureAlpha()
+    const { width = 600, height = 600 } = await original.metadata()
+    console.log('📐 Dimensions image :', width, 'x', height)
 
-  return new NextResponse(finalPng, {
-    status: 200,
-    headers: {
-      'Content-Type': 'image/png',
-      'Cache-Control': 'no-store',
-    },
-  })
+    const watermarkSvg = Buffer.from(`
+      <svg width="${width}" height="50">
+        <style>.text { font-size: 20px; fill: white; font-family: Arial; }</style>
+        <text x="10" y="35" class="text">@${username} – DZYR</text>
+      </svg>
+    `)
+
+    const composited = await original
+      .composite([{ input: watermarkSvg, top: height - 50, left: 0 }])
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+
+    const encoded = encodeRobustLSB(
+      composited.data,
+      composited.info.width,
+      composited.info.height,
+      trace,
+      6
+    )
+
+    const finalPng = await sharp(encoded, {
+      raw: {
+        width: composited.info.width,
+        height: composited.info.height,
+        channels: composited.info.channels,
+      },
+    }).png().toBuffer()
+
+    console.log('✅ Image finale générée et retournée')
+    return new NextResponse(finalPng, {
+      status: 200,
+      headers: {
+        'Content-Type': 'image/png',
+        'Cache-Control': 'no-store',
+      },
+    })
+  } catch (err: any) {
+    console.error('🔥 [API /generate-image] Erreur serveur :', err)
+    return new NextResponse('Erreur serveur interne', { status: 500 })
+  }
 }
