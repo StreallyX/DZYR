@@ -51,7 +51,7 @@ export default function SecureImageViewer({ path, className }: Props) {
 
         // 🖼 Télécharge l'image protégée
         console.log('[SecureImageViewer] 🔄 Requête /api/generate-image...')
-        const imageRes = await fetch(`/api/generate-image?path=${encodeURIComponent(path)}`, {
+        const imageRes = await fetch(`/api/protected-image?path=${encodeURIComponent(path)}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
